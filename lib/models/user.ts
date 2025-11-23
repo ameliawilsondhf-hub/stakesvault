@@ -168,7 +168,12 @@ export interface IUser extends Document {
     level3: Types.ObjectId[];
     stakedBalance: number;
     stakes: IStake[];
-    
+   depositAmount: number;
+directCommissionGiven: boolean;
+lastCommissionDeposit: number;
+
+ // 1st deposit commission
+
     // Auto-Invest
     autoInvestEnabled: boolean;
     autoInvestSettings: IAutoInvestSettings;

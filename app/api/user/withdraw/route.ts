@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
+import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import Withdraw from "@/lib/models/withdraw";
 import { cookies } from "next/headers";
