@@ -42,3 +42,11 @@
     "node_modules"
   ]
 }
+# 1. Changes add karo
+git add .
+
+# 2. Commit karo
+git commit -m "Fix import paths and remove .next from git"
+
+# 3. Push karo
+git push origin main
