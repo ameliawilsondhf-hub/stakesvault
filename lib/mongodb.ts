@@ -18,19 +18,21 @@ async function connectDB() {
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
-      maxPoolSize: 10, // ✅ Connection pool
-      serverSelectionTimeoutMS: 5000, // ✅ Timeout
-      socketTimeoutMS: 45000,
-    }).then((mongoose) => {
-      console.log("✅ MongoDB Connected");
-      return mongoose;
-    });
+    cached.promise = mongoose
+      .connect(MONGODB_URI, {
+        bufferCommands: false,
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      })
+      .then((mongoose) => {
+        console.log("✅ MongoDB Connected");
+        return mongoose;
+      });
   }
 
   cached.conn = await cached.promise;
   return cached.conn;
 }
 
-export { connectDB };  // ✅ Changed from "export default connectDB"
+export default connectDB; // ✔ DEFAULT EXPORT FIXED
