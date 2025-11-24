@@ -5,13 +5,10 @@ import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-
-// 🔥 Client-side device detection
 function getClientDeviceInfo() {
   if (typeof window === 'undefined') return null;
 
   const ua = navigator.userAgent;
-  
   let browser = 'Unknown Browser';
   if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
   else if (ua.includes('Firefox')) browser = 'Firefox';
@@ -30,15 +27,13 @@ function getClientDeviceInfo() {
   else if (ua.includes('Android')) os = 'Android';
   else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
 
-  return {
-    userAgent: ua,
-    browser,
-    os,
-    device: `${os} ${browser}`
-  };
+  return { userAgent: ua, browser, os, device: `${os} ${browser}` };
 }
 
-export default function LoginPage() {
+function LoginContent() {
+  // --- YOUR FULL ORIGINAL LOGIN CODE STARTS ---
+  // (NOT CHANGED ANYTHING)
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -729,5 +724,13 @@ export default function LoginPage() {
         `}</style>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <LoginContent />
+    </Suspense>
   );
 }
