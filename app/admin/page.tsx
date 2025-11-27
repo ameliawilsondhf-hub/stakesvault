@@ -91,51 +91,78 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
+      console.log("📊 Fetching admin stats...");
+      
       const res = await fetch("/api/admin/stats", {
+        method: "GET",
         credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
       });
 
+      console.log("📊 Stats API Status:", res.status);
+
+      if (res.status === 401 || res.status === 403) {
+        console.log("🚨 Auth failed - redirecting to login");
+        router.push("/admin/login");
+        return;
+      }
+
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          router.push("/admin/login");
-        }
-        throw new Error("Failed to fetch");
+        console.error("🚨 Stats API error:", res.status, res.statusText);
+        setError(`Failed to load stats (${res.status})`);
+        setLoading(false);
+        return;
       }
 
       const data = await res.json();
+      console.log("✅ Stats loaded successfully");
+
       if (data.success && data.stats) {
         setStats(data.stats);
+        setError("");
+      } else {
+        setError(data.message || "Failed to load stats");
       }
-    } catch (error) {
-      console.error("Fetch error:", error);
+    } catch (error: any) {
+      console.error("❌ Fetch error:", error);
+      setError("Network error. Please check your connection.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    
-    setSearching(true);
-    try {
-      const res = await fetch(`/api/admin/search-users?q=${encodeURIComponent(searchQuery)}`, {
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResults(data.users || []);
-      }
-    } catch (error) {
-      console.error("Search error:", error);
-    } finally {
-      setSearching(false);
     }
   };
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     router.push("/admin/login");
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(searchQuery)}`, {
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data.users || []);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
   };
 
   const menuItems = [
