@@ -1,7 +1,6 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
+const resend = new Resend(process.env.RESEND_API_KEY || '');
 /**
  * Send Password Reset Email
  * Automatically uses correct domain based on environment
