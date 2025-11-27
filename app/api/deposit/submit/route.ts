@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
-import Withdraw from "@/lib/models/withdraw";
+import Deposit from "@/lib/models/deposit";
 import jwt from "jsonwebtoken";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "../../auth/[...nextauth]/route";
 
 export const dynamic = 'force-dynamic';
 
 // Cloudinary upload function
 async function uploadToCloudinary(base64Image: string): Promise<string> {
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dkpsdkbpq";
-  const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || "deposit_proofs";
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "your-cloud-name";
+  const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || "unsigned_preset";
 
   const formData = new FormData();
   formData.append("file", base64Image);
@@ -34,7 +34,7 @@ async function uploadToCloudinary(base64Image: string): Promise<string> {
   return data.secure_url;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 
     // --- 2. Get Request Body ---
     const body = await request.json();
-    const { amount, walletAddress, qrImage } = body;
+    const { amount, proofImage } = body;
 
     // --- 3. Validation ---
     if (!amount || amount <= 0) {
@@ -82,61 +82,41 @@ export async function POST(request: Request) {
       );
     }
 
-    // Minimum withdrawal check
-    const MIN_WITHDRAWAL = 10;
-    if (parseFloat(amount) < MIN_WITHDRAWAL) {
+    if (!proofImage) {
       return NextResponse.json(
-        { success: false, message: `Minimum withdrawal is $${MIN_WITHDRAWAL} USDT` },
+        { success: false, message: "Payment proof is required" },
         { status: 400 }
       );
     }
 
-    if (!walletAddress || !walletAddress.trim()) {
+    // --- 4. Get deposit settings ---
+    const settings = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/settings/get`);
+    const settingsData = await settings.json();
+    
+    if (settingsData.success && amount < settingsData.settings.minDeposit) {
       return NextResponse.json(
-        { success: false, message: "Wallet address is required" },
+        { success: false, message: `Minimum deposit is ${settingsData.settings.minDeposit} USDT` },
         { status: 400 }
       );
     }
 
-    // --- 4. Check User Balance & Deduct ---
-    const user = await User.findById(userId);
-    if (!user) {
+    // --- 5. Upload Image to Cloudinary ---
+    let imageUrl: string;
+    try {
+      imageUrl = await uploadToCloudinary(proofImage);
+    } catch (error) {
+      console.error("Cloudinary upload error:", error);
       return NextResponse.json(
-        { success: false, message: "User not found" },
-        { status: 404 }
+        { success: false, message: "Failed to upload image" },
+        { status: 500 }
       );
     }
 
-    if (user.walletBalance < amount) {
-      return NextResponse.json(
-        { success: false, message: "Insufficient balance" },
-        { status: 400 }
-      );
-    }
-
-    // 🔥 DEDUCT WALLET BALANCE IMMEDIATELY
-    user.walletBalance -= parseFloat(amount);
-    await user.save();
-
-    console.log(`✅ Deducted $${amount} from user ${user.email}. New balance: $${user.walletBalance}`);
-
-    // --- 5. Upload QR Image to Cloudinary (if provided) ---
-    let qrImageUrl: string | null = null;
-    if (qrImage) {
-      try {
-        qrImageUrl = await uploadToCloudinary(qrImage);
-      } catch (error) {
-        console.error("Cloudinary upload error:", error);
-        // Continue without image if upload fails
-      }
-    }
-
-    // --- 6. Create Withdrawal Record ---
-    const withdrawal = await Withdraw.create({
+    // --- 6. Create Deposit Record ---
+    const deposit = await Deposit.create({
       userId,
       amount: parseFloat(amount),
-      walletAddress: walletAddress.trim(),
-      qrImage: qrImageUrl,
+      screenshot: imageUrl,
       status: "pending",
     });
 
@@ -144,14 +124,14 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        message: "Withdrawal request submitted. Amount deducted from wallet.",
-        withdrawalId: withdrawal._id,
+        message: "Deposit request submitted successfully",
+        depositId: deposit._id,
       },
       { status: 201 }
     );
 
   } catch (error: any) {
-    console.error("❌ Withdrawal Submit Error:", error);
+    console.error("❌ Deposit Submit Error:", error);
     return NextResponse.json(
       {
         success: false,

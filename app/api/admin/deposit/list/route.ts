@@ -18,26 +18,18 @@ export async function GET() {
       .sort({ createdAt: -1 })
       .lean();
 
-    // 🔥 Add full screenshot path here
-    const updatedDeposits = deposits.map((d: any) => ({
-      ...d,
-      screenshot: d.screenshot ? `/uploads/${d.screenshot}` : null,
-    }));
-
-    return NextResponse.json({
-      success: true,
-      data: updatedDeposits,
+    // Return deposits directly as array
+    return NextResponse.json(deposits, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
     });
 
   } catch (error: any) {
-    console.log("❌ ADMIN-LIST ERROR:", error);
+    console.error("❌ ADMIN-LIST ERROR:", error);
 
     return NextResponse.json(
-      {
-        success: false,
-        message: "Failed to load deposits",
-        error: error.message,
-      },
+      { error: "Failed to load deposits" },
       { status: 500 }
     );
   }

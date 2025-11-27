@@ -121,9 +121,13 @@ export interface IUser extends Document {
     resetPasswordToken?: string;
     resetPasswordExpires?: Date;
     
-    // 🔥 NEW: Admin OTP
+    // 🔥 Admin OTP
     adminOTP?: string;
     adminOTPExpires?: Date;
+    
+    // ✅ NEW: Email OTP for User Verification
+    emailOTP?: string;
+    emailOTPExpiry?: Date;
     
     // Banning/Status
     isBanned: boolean;
@@ -168,11 +172,9 @@ export interface IUser extends Document {
     level3: Types.ObjectId[];
     stakedBalance: number;
     stakes: IStake[];
-   depositAmount: number;
-directCommissionGiven: boolean;
-lastCommissionDeposit: number;
-
- // 1st deposit commission
+    depositAmount: number;
+    directCommissionGiven: boolean;
+    lastCommissionDeposit: number;
 
     // Auto-Invest
     autoInvestEnabled: boolean;
@@ -248,12 +250,22 @@ const UserSchema = new Schema<IUser>(
         resetPasswordToken: String,
         resetPasswordExpires: Date,
 
-        // 🔥 NEW: Admin OTP Fields
+        // 🔥 Admin OTP Fields
         adminOTP: { 
             type: String, 
             select: false  // Hidden by default for security
         },
         adminOTPExpires: { 
+            type: Date, 
+            select: false 
+        },
+
+        // ✅ NEW: Email OTP Fields for User Verification
+        emailOTP: { 
+            type: String, 
+            select: false  // Hidden by default for security
+        },
+        emailOTPExpiry: { 
             type: Date, 
             select: false 
         },
@@ -348,6 +360,10 @@ const UserSchema = new Schema<IUser>(
 
         stakedBalance: { type: Number, default: 0 },
         stakes: [StakeSchema],
+
+        depositAmount: { type: Number, default: 0 },
+        directCommissionGiven: { type: Boolean, default: false },
+        lastCommissionDeposit: { type: Number, default: 0 },
 
         autoInvestEnabled: { type: Boolean, default: false },
         autoInvestSettings: {

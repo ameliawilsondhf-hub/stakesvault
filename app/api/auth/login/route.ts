@@ -11,17 +11,22 @@ const failedAttempts = new Map<string, { count: number; firstAttempt: Date; atte
 
 // Get client IP
 async function getClientIP(): Promise<string> {
-  const headersList = await headers();
-  const forwarded = headersList.get("x-forwarded-for");
-  const realIP = headersList.get("x-real-ip");
-  
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
+  try {
+    const headersList = await headers();
+    const forwarded = headersList.get("x-forwarded-for");
+    const realIP = headersList.get("x-real-ip");
+    
+    if (forwarded) {
+      return forwarded.split(",")[0].trim();
+    }
+    if (realIP) {
+      return realIP;
+    }
+    return "unknown";
+  } catch (error) {
+    console.log("⚠️ Could not get client IP");
+    return "unknown";
   }
-  if (realIP) {
-    return realIP;
-  }
-  return "unknown";
 }
 
 // Check if IP is blocked

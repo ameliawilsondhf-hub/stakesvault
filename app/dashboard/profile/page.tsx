@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,15 +18,12 @@ const countries = [
   { name: "Canada", code: "+1" },
   { name: "China", code: "+86" },
   { name: "Colombia", code: "+57" },
-  { name: "Czech Republic", code: "+420" },
   { name: "Denmark", code: "+45" },
   { name: "Egypt", code: "+20" },
   { name: "Finland", code: "+358" },
   { name: "France", code: "+33" },
   { name: "Germany", code: "+49" },
   { name: "Greece", code: "+30" },
-  { name: "Hong Kong", code: "+852" },
-  { name: "Hungary", code: "+36" },
   { name: "India", code: "+91" },
   { name: "Indonesia", code: "+62" },
   { name: "Iran", code: "+98" },
@@ -36,35 +33,27 @@ const countries = [
   { name: "Italy", code: "+39" },
   { name: "Japan", code: "+81" },
   { name: "Jordan", code: "+962" },
-  { name: "Kenya", code: "+254" },
-  { name: "Kuwait", code: "+965" },
-  { name: "Lebanon", code: "+961" },
   { name: "Malaysia", code: "+60" },
   { name: "Mexico", code: "+52" },
   { name: "Morocco", code: "+212" },
   { name: "Netherlands", code: "+31" },
-  { name: "New Zealand", code: "+64" },
   { name: "Nigeria", code: "+234" },
   { name: "Norway", code: "+47" },
-  { name: "Oman", code: "+968" },
   { name: "Pakistan", code: "+92" },
   { name: "Palestine", code: "+970" },
   { name: "Philippines", code: "+63" },
   { name: "Poland", code: "+48" },
   { name: "Portugal", code: "+351" },
   { name: "Qatar", code: "+974" },
-  { name: "Romania", code: "+40" },
   { name: "Russia", code: "+7" },
   { name: "Saudi Arabia", code: "+966" },
   { name: "Singapore", code: "+65" },
   { name: "South Africa", code: "+27" },
   { name: "South Korea", code: "+82" },
   { name: "Spain", code: "+34" },
-  { name: "Sri Lanka", code: "+94" },
   { name: "Sweden", code: "+46" },
   { name: "Switzerland", code: "+41" },
   { name: "Syria", code: "+963" },
-  { name: "Taiwan", code: "+886" },
   { name: "Thailand", code: "+66" },
   { name: "Turkey", code: "+90" },
   { name: "Ukraine", code: "+380" },
@@ -72,44 +61,42 @@ const countries = [
   { name: "United Kingdom", code: "+44" },
   { name: "United States", code: "+1" },
   { name: "Vietnam", code: "+84" },
-  { name: "Yemen", code: "+967" },
 ];
+
+interface ProfileData {
+  name: string;
+  email: string;
+  phone: string;
+  phoneCode: string;
+  country: string;
+  emailVerified: boolean;
+}
 
 export default function ProfilePage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState("profile");
+  
+  // 🔥 Triple Protection: Prevent duplicate OTP calls
+  const otpSendingRef = useRef(false);
+  const lastOtpTimeRef = useRef(0);
   
   // Profile data
-  const [profile, setProfile] = useState({
+  const [profile, setProfile] = useState<ProfileData>({
     name: "",
     email: "",
     phone: "",
     phoneCode: "+1",
-    dateOfBirth: "",
-    address: "",
-    city: "",
     country: "",
-    postalCode: "",
     emailVerified: false,
-    twoFactorEnabled: false,
   });
 
-  // ✅ NEW: Two-Factor Data State
-  const [twoFactorData, setTwoFactorData] = useState({
-    qrCode: "",
-    secret: "",
-    backupCodes: [] as string[],
-  });
-
-  // Password change
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
+  // OTP States
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   // Messages
   const [message, setMessage] = useState({ type: "", text: "" });
@@ -150,13 +137,8 @@ export default function ProfilePage() {
         email: data.email || "",
         phone: phoneNumber,
         phoneCode: phoneCode,
-        dateOfBirth: data.dateOfBirth ? data.dateOfBirth.split("T")[0] : "",
-        address: data.address || "",
-        city: data.city || "",
         country: data.country || "",
-        postalCode: data.postalCode || "",
         emailVerified: data.emailVerified || false,
-        twoFactorEnabled: data.twoFactorEnabled || false,
       });
       setLoading(false);
     } catch (error) {
@@ -179,8 +161,9 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          ...profile,
+          name: profile.name,
           phone: fullPhone,
+          country: profile.country,
         }),
       });
 
@@ -198,484 +181,319 @@ export default function ProfilePage() {
     }
   };
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+  // 🔥 FIXED: Send OTP with TRIPLE protection against duplicates
+  const handleSendOtp = async () => {
+    const now = Date.now();
+
+    // Protection 1: Check if already sending (ref)
+    if (otpSendingRef.current) {
+      console.log("⚠️ OTP send blocked - Already in progress (ref check)");
+      return;
+    }
+
+    // Protection 2: Check state
+    if (sendingOtp) {
+      console.log("⚠️ OTP send blocked - Already in progress (state check)");
+      return;
+    }
+
+    // Protection 3: Rate limiting (prevent multiple calls within 5 seconds)
+    if (now - lastOtpTimeRef.current < 5000) {
+      console.log("⚠️ OTP send blocked - Too soon (rate limit)");
+      setMessage({ 
+        type: "error", 
+        text: "Please wait a few seconds before requesting another code" 
+      });
+      return;
+    }
+
+    // Lock all protections
+    otpSendingRef.current = true;
+    lastOtpTimeRef.current = now;
+    setSendingOtp(true);
     setMessage({ type: "", text: "" });
 
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ type: "error", text: "Passwords do not match!" });
-      setSaving(false);
-      return;
-    }
-
-    if (passwordData.newPassword.length < 6) {
-      setMessage({ type: "error", text: "Password must be at least 6 characters!" });
-      setSaving(false);
-      return;
-    }
+    console.log("📤 Sending OTP request...");
 
     try {
-      const res = await fetch("/api/user/password/change", {
+      const res = await fetch("/api/user/email/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          currentPassword: passwordData.currentPassword,
-          newPassword: passwordData.newPassword,
-        }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setMessage({ type: "success", text: "Password changed successfully!" });
-        setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+        setOtpSent(true);
+        setMessage({ type: "success", text: "✅ OTP sent to your email!" });
+        console.log("✅ OTP sent successfully");
       } else {
-        setMessage({ type: "error", text: data.message || "Password change failed" });
+        setMessage({ type: "error", text: data.message || "Failed to send OTP" });
+        console.error("❌ OTP send failed:", data.message);
       }
     } catch (error) {
+      console.error("❌ OTP send exception:", error);
       setMessage({ type: "error", text: "Server error. Please try again." });
     } finally {
-      setSaving(false);
+      setSendingOtp(false);
+      
+      // Unlock ref after 5 seconds to allow retry
+      setTimeout(() => {
+        otpSendingRef.current = false;
+        console.log("🔓 OTP send unlocked for retry");
+      }, 5000);
     }
   };
 
-  // ✅ UPDATED: Toggle Two-Factor Authentication
-  const toggleTwoFactor = async () => {
-    setSaving(true);
+  // 🔥 Verify OTP
+  const handleVerifyOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      setMessage({ type: "error", text: "Please enter a valid 6-digit OTP" });
+      return;
+    }
+
+    setVerifyingOtp(true);
     setMessage({ type: "", text: "" });
 
     try {
-      const res = await fetch("/api/user/security/two-factor", {
+      const res = await fetch("/api/user/email/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          enable: !profile.twoFactorEnabled,
-        }),
+        body: JSON.stringify({ otp: otpCode }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setProfile({ ...profile, twoFactorEnabled: !profile.twoFactorEnabled });
+        setProfile({ ...profile, emailVerified: true });
+        setOtpSent(false);
+        setOtpCode("");
+        setMessage({ type: "success", text: "✅ Email verified! Welcome email sent." });
         
-        // ✅ If enabling, show QR code and backup codes
-        if (data.qrCode) {
-          setTwoFactorData({
-            qrCode: data.qrCode,
-            secret: data.secret,
-            backupCodes: data.backupCodes,
-          });
-        } else {
-          // Clear data when disabling
-          setTwoFactorData({
-            qrCode: "",
-            secret: "",
-            backupCodes: [],
-          });
-        }
-        
-        setMessage({ 
-          type: "success", 
-          text: data.message
-        });
+        // Reload profile to get updated data
+        setTimeout(() => {
+          loadProfile();
+        }, 1000);
       } else {
-        setMessage({ type: "error", text: data.message || "Failed to update" });
+        setMessage({ type: "error", text: data.message || "Invalid OTP" });
       }
     } catch (error) {
       setMessage({ type: "error", text: "Server error. Please try again." });
     } finally {
-      setSaving(false);
+      setVerifyingOtp(false);
     }
   };
 
   if (!mounted || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-[#06080e] dark:via-[#0f121b] dark:to-[#161b26]">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading profile...</p>
+          <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-t-4 border-b-4 border-purple-500 mx-auto"></div>
+          <p className="mt-4 text-gray-300 text-sm sm:text-base">Loading profile...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-[#06080e] dark:via-[#0f121b] dark:to-[#161b26] p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-3 sm:p-6">
       
       {/* Back Button */}
       <Link href="/dashboard">
-        <button className="mb-6 px-4 py-2 bg-white/20 dark:bg-white/10 border border-white/30 rounded-xl text-gray-800 dark:text-white hover:bg-white/30 dark:hover:bg-white/20 transition">
-          ← Back to Dashboard
+        <button className="mb-4 sm:mb-6 px-3 sm:px-4 py-2 bg-white/10 border border-white/20 rounded-lg sm:rounded-xl text-white hover:bg-white/20 transition text-sm sm:text-base">
+          ← Back
         </button>
       </Link>
 
       {/* Header */}
-      <div className="max-w-4xl mx-auto mb-8">
-        <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-blue-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent">
+      <div className="max-w-3xl mx-auto mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
           Profile Settings
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Manage your account settings and preferences</p>
-      </div>
-
-      {/* Tabs */}
-      <div className="max-w-4xl mx-auto mb-6">
-        <div className="flex gap-4 border-b border-gray-300 dark:border-gray-700">
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`px-6 py-3 font-semibold transition-all ${
-              activeTab === "profile"
-                ? "text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-            }`}
-          >
-            👤 Profile Info
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`px-6 py-3 font-semibold transition-all ${
-              activeTab === "security"
-                ? "text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-            }`}
-          >
-            🔒 Security
-          </button>
-        </div>
+        <p className="text-gray-400 mt-2 text-xs sm:text-sm md:text-base">Manage your account information</p>
       </div>
 
       {/* Message Alert */}
       {message.text && (
-        <div className={`max-w-4xl mx-auto mb-6 p-4 rounded-xl ${
+        <div className={`max-w-3xl mx-auto mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg sm:rounded-xl text-sm sm:text-base ${
           message.type === "success" 
-            ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
-            : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
+            ? "bg-green-500/20 border border-green-500/50 text-green-300"
+            : "bg-red-500/20 border border-red-500/50 text-red-300"
         }`}>
           {message.text}
         </div>
       )}
 
-      {/* Profile Info Tab */}
-      {activeTab === "profile" && (
-        <div className="max-w-4xl mx-auto bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-gray-200/50 dark:border-gray-700/50 shadow-xl">
-          <form onSubmit={handleProfileUpdate} className="space-y-6">
-            
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Full Name
-              </label>
-              <input
-                type="text"
-                value={profile.name}
-                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                required
-              />
-            </div>
+      {/* Profile Form */}
+      <div className="max-w-3xl mx-auto bg-white/5 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 shadow-2xl">
+        <form onSubmit={handleProfileUpdate} className="space-y-4 sm:space-y-6">
+          
+          {/* Name */}
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-300 mb-2">
+              Full Name
+            </label>
+            <input
+              type="text"
+              value={profile.name}
+              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+              className="w-full p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-800/50 text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm sm:text-base"
+              placeholder="Enter your full name"
+              required
+            />
+          </div>
 
-            {/* Email (Read-only) */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Email Address
-              </label>
+          {/* Email with OTP Verification */}
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-300 mb-2">
+              Email Address
+            </label>
+            <div className="relative">
               <input
                 type="email"
                 value={profile.email}
                 disabled
-                className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                className="w-full p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700/50 text-gray-400 cursor-not-allowed text-sm sm:text-base"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {profile.emailVerified ? "✓ Verified" : "⚠️ Not verified"}
-              </p>
-            </div>
-
-            {/* Phone with Country Code */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Phone Number
-              </label>
-              <div className="flex gap-2">
-                <select
-                  value={profile.phoneCode}
-                  onChange={(e) => setProfile({ ...profile, phoneCode: e.target.value })}
-                  className="w-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                >
-                  {countries.map((country, idx) => (
-                    <option key={`phone-${country.code}-${idx}`} value={country.code}>
-                      {country.code} {country.name}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="tel"
-                  value={profile.phone}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value.replace(/\D/g, '') })}
-                  placeholder="1234567890"
-                  className="flex-1 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                />
+              <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2">
+                {profile.emailVerified ? (
+                  <span className="flex items-center gap-1 sm:gap-2 text-green-400 text-xs sm:text-sm font-semibold bg-green-500/20 px-2 sm:px-3 py-1 rounded-full">
+                    <span className="text-sm sm:text-base">✓</span>
+                    <span className="hidden sm:inline">Verified</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 sm:gap-2 text-yellow-400 text-xs sm:text-sm font-semibold bg-yellow-500/20 px-2 sm:px-3 py-1 rounded-full">
+                    <span className="text-sm sm:text-base">⚠</span>
+                    <span className="hidden sm:inline">Not Verified</span>
+                  </span>
+                )}
               </div>
             </div>
-
-            {/* Date of Birth */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Date of Birth
-              </label>
-              <input
-                type="date"
-                value={profile.dateOfBirth}
-                onChange={(e) => setProfile({ ...profile, dateOfBirth: e.target.value })}
-                className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-              />
-            </div>
-
-            {/* Address */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Street Address
-              </label>
-              <input
-                type="text"
-                value={profile.address}
-                onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                placeholder="123 Main Street"
-                className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-              />
-            </div>
-
-            {/* City & Postal Code */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  City
-                </label>
-                <input
-                  type="text"
-                  value={profile.city}
-                  onChange={(e) => setProfile({ ...profile, city: e.target.value })}
-                  placeholder="New York"
-                  className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Postal Code
-                </label>
-                <input
-                  type="text"
-                  value={profile.postalCode}
-                  onChange={(e) => setProfile({ ...profile, postalCode: e.target.value })}
-                  placeholder="10001"
-                  className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Country Dropdown */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Country
-              </label>
-              <select
-                value={profile.country}
-                onChange={(e) => setProfile({ ...profile, country: e.target.value })}
-                className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-              >
-                <option value="">Select Country</option>
-                {countries.map((country) => (
-                  <option key={country.name} value={country.name}>
-                    {country.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white p-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* Security Tab */}
-      {activeTab === "security" && (
-        <div className="max-w-4xl mx-auto space-y-6">
-          
-          {/* Change Password */}
-          <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-gray-200/50 dark:border-gray-700/50 shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Change Password</h2>
             
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Current Password
-                </label>
-                <input
-                  type="password"
-                  value={passwordData.currentPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                  className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  value={passwordData.newPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                  className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Confirm New Password
-                </label>
-                <input
-                  type="password"
-                  value={passwordData.confirmPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                  className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white p-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
-              >
-                {saving ? "Changing..." : "Change Password"}
-              </button>
-            </form>
-          </div>
-
-          {/* ✅ TWO-FACTOR AUTHENTICATION WITH QR CODE */}
-          <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-gray-200/50 dark:border-gray-700/50 shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">
-              Two-Factor Authentication
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Add an extra layer of security to your account with Google Authenticator
-            </p>
-            
-            {/* Status & Toggle */}
-            <div className="flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-800 rounded-xl mb-4">
-              <span className="text-gray-800 dark:text-white font-medium">
-                Status: {profile.twoFactorEnabled ? "✓ Enabled" : "✗ Disabled"}
-              </span>
-              <button 
-                onClick={toggleTwoFactor}
-                disabled={saving}
-                className={`px-6 py-2 rounded-lg font-semibold transition ${
-                  profile.twoFactorEnabled
-                    ? "bg-red-600 hover:bg-red-700 text-white"
-                    : "bg-purple-600 hover:bg-purple-700 text-white"
-                } disabled:opacity-50`}
-              >
-                {saving ? "Processing..." : profile.twoFactorEnabled ? "Disable" : "Enable"}
-              </button>
-            </div>
-
-            {/* ✅ QR Code & Setup Instructions */}
-            {twoFactorData.qrCode && (
-              <div className="mt-6 space-y-6">
+            {/* OTP Verification Section */}
+            {!profile.emailVerified && (
+              <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg sm:rounded-xl">
+                <p className="text-yellow-300 text-xs sm:text-sm mb-3">
+                  Please verify your email address to secure your account
+                </p>
                 
-                {/* QR Code */}
-                <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 text-center">
-                    📱 Scan QR Code
-                  </h3>
-                  <div className="flex justify-center mb-4">
-                    <img 
-                      src={twoFactorData.qrCode} 
-                      alt="2FA QR Code" 
-                      className="w-64 h-64 border-4 border-purple-500 rounded-xl"
-                    />
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                    Scan this QR code with Google Authenticator or Authy app
-                  </p>
-                </div>
-
-                {/* Manual Setup */}
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-6 rounded-xl border border-yellow-200 dark:border-yellow-800">
-                  <h3 className="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-3">
-                    🔑 Manual Setup Key
-                  </h3>
-                  <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-2">
-                    If you can't scan the QR code, enter this key manually:
-                  </p>
-                  <div className="bg-white dark:bg-gray-800 p-3 rounded-lg font-mono text-sm break-all">
-                    {twoFactorData.secret}
-                  </div>
-                </div>
-
-                {/* Backup Codes */}
-                <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-xl border border-red-200 dark:border-red-800">
-                  <h3 className="text-lg font-bold text-red-800 dark:text-red-300 mb-3">
-                    🚨 Backup Codes
-                  </h3>
-                  <p className="text-sm text-red-700 dark:text-red-400 mb-4">
-                    <strong>IMPORTANT:</strong> Save these backup codes in a safe place. 
-                    You can use them to login if you lose access to your authenticator app.
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    {twoFactorData.backupCodes.map((code, index) => (
-                      <div 
-                        key={index}
-                        className="bg-white dark:bg-gray-800 p-2 rounded-lg font-mono text-sm text-center"
-                      >
-                        {code}
-                      </div>
-                    ))}
-                  </div>
+                {!otpSent ? (
                   <button
-                    onClick={() => {
-                      const codes = twoFactorData.backupCodes.join('\n');
-                      navigator.clipboard.writeText(codes);
-                      alert('Backup codes copied to clipboard!');
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSendOtp();
                     }}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg font-semibold transition"
+                    disabled={sendingOtp || otpSendingRef.current}
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white p-2 sm:p-2.5 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
                   >
-                    📋 Copy All Backup Codes
+                    {sendingOtp ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="animate-spin">⏳</span>
+                        Sending OTP...
+                      </span>
+                    ) : (
+                      "📧 Send Verification Code"
+                    )}
                   </button>
-                </div>
-
-                {/* Instructions */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
-                  <h3 className="text-lg font-bold text-blue-800 dark:text-blue-300 mb-3">
-                    📖 Setup Instructions
-                  </h3>
-                  <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700 dark:text-blue-400">
-                    <li>Download Google Authenticator or Authy app on your phone</li>
-                    <li>Open the app and tap "Add Account" or "+"</li>
-                    <li>Scan the QR code above with your phone camera</li>
-                    <li>The app will generate a 6-digit code every 30 seconds</li>
-                    <li>Save your backup codes in a safe place</li>
-                    <li>Use the 6-digit code to login from now on</li>
-                  </ol>
-                </div>
-
+                ) : (
+                  <div className="space-y-2 sm:space-y-3">
+                    <input
+                      type="text"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      className="w-full p-2 sm:p-2.5 rounded-lg border border-gray-600 bg-gray-800 text-white text-center text-base sm:text-lg font-mono tracking-widest focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleVerifyOtp}
+                        disabled={verifyingOtp || otpCode.length !== 6}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white p-2 sm:p-2.5 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
+                      >
+                        {verifyingOtp ? "Verifying..." : "✓ Verify Code"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleSendOtp();
+                        }}
+                        disabled={sendingOtp || otpSendingRef.current}
+                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white p-2 sm:p-2.5 rounded-lg font-semibold transition disabled:opacity-50 text-xs sm:text-sm"
+                      >
+                        {sendingOtp ? "..." : "↻ Resend"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-        </div>
-      )}
+          {/* Country */}
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-300 mb-2">
+              Country
+            </label>
+            <select
+              value={profile.country}
+              onChange={(e) => setProfile({ ...profile, country: e.target.value })}
+              className="w-full p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-800/50 text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm sm:text-base"
+              required
+            >
+              <option value="">Select Country</option>
+              {countries.map((country) => (
+                <option key={country.name} value={country.name}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Phone with Country Code */}
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-300 mb-2">
+              Phone Number
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={profile.phoneCode}
+                onChange={(e) => setProfile({ ...profile, phoneCode: e.target.value })}
+                className="w-20 sm:w-28 p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-800/50 text-white focus:ring-2 focus:ring-purple-500 outline-none text-xs sm:text-sm"
+              >
+                {countries.map((country, index) => (
+                  <option key={`phone-${country.code}-${index}`} value={country.code}>
+                    {country.code}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                value={profile.phone}
+                onChange={(e) => setProfile({ ...profile, phone: e.target.value.replace(/\D/g, '') })}
+                placeholder="1234567890"
+                className="flex-1 p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-800/50 text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm sm:text-base"
+              />
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 hover:from-purple-700 hover:via-pink-700 hover:to-blue-700 text-white p-3 sm:p-4 rounded-lg sm:rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+          >
+            {saving ? "Saving Changes..." : "💾 Save Profile"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

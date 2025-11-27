@@ -1,31 +1,24 @@
-import mongoose, { Schema, models } from "mongoose";
+import mongoose, { Schema, Model, Document } from "mongoose";
 
-const adminSchema = new Schema(
+export interface IAdmin extends Document {
+  email: string;
+  password: string;
+  resetOTP: string | null;
+  resetOTPExpire: Date | null;
+}
+
+const adminSchema = new Schema<IAdmin>(
   {
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-    password: {
-      type: String,
-      required: true,
-    },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
 
-    // 🔥 OTP store for reset password
-    resetOTP: {
-      type: String,
-      default: null,
-    },
-    resetOTPExpire: {
-      type: Date,
-      default: null,
-    },
+    resetOTP: { type: String, default: null },
+    resetOTPExpire: { type: Date, default: null },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-const Admin = models.Admin || mongoose.model("Admin", adminSchema);
+const Admin: Model<IAdmin> =
+  mongoose.models.Admin || mongoose.model<IAdmin>("Admin", adminSchema);
+
 export default Admin;

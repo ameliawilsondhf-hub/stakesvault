@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Withdraw from "@/lib/models/withdraw";
+import User from "@/lib/models/user";
 
 export async function POST(req: Request) {
   try {
@@ -10,39 +11,56 @@ export async function POST(req: Request) {
     
     if (!withdrawId) {
       return NextResponse.json(
-        { message: "Withdraw ID missing" },
+        { success: false, message: "Withdraw ID missing" },
         { status: 400 }
       );
     }
 
-    // Fetch record
-    const reqDoc = await Withdraw.findById(withdrawId);
+    const withdrawal = await Withdraw.findById(withdrawId);
 
-    if (!reqDoc) {
+    if (!withdrawal) {
       return NextResponse.json(
-        { message: "Withdraw request not found" },
+        { success: false, message: "Withdrawal request not found" },
         { status: 404 }
       );
     }
 
-    // Already processed?
-    if (reqDoc.status !== "pending") {
+    if (withdrawal.status !== "pending") {
       return NextResponse.json(
-        { message: "Request already processed!" },
+        { success: false, message: "Request already processed" },
         { status: 400 }
       );
     }
 
-    // Update status
-    reqDoc.status = "rejected";
-    await reqDoc.save();   // <<–– ERROR HERE FIXED
+    // 🔥 REFUND AMOUNT TO USER WALLET
+    const user = await User.findById(withdrawal.userId);
 
-    return NextResponse.json({ message: "Withdraw rejected successfully" });
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    // Refund the amount
+    user.walletBalance += withdrawal.amount;
+    await user.save();
+
+    console.log(`✅ Refunded $${withdrawal.amount} to user ${user.email}. New balance: $${user.walletBalance}`);
+
+    // Update withdrawal status
+    withdrawal.status = "rejected";
+    await withdrawal.save();
+
+    return NextResponse.json({ 
+      success: true, 
+      message: "Withdrawal rejected and amount refunded to wallet" 
+    });
 
   } catch (err: any) {
-    console.log("WITHDRAW REJECT ERROR:", err);
+    console.error("❌ Withdraw Reject Error:", err);
     return NextResponse.json(
-      { message: "Server error", error: err.message },
+      { success: false, message: "Server error", error: err.message },
       { status: 500 }
     );
   }

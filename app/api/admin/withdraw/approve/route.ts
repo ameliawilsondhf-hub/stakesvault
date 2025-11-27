@@ -11,44 +11,42 @@ export async function POST(req: Request) {
 
     if (!withdrawId) {
       return NextResponse.json(
-        { message: "withdrawId missing" },
+        { success: false, message: "Withdraw ID missing" },
         { status: 400 }
       );
     }
 
-    const request = await Withdraw.findById(withdrawId);
+    const withdrawal = await Withdraw.findById(withdrawId);
 
-    if (!request)
-      return NextResponse.json({ message: "Request not found" }, { status: 404 });
-
-    if (request.status !== "pending")
-      return NextResponse.json({ message: "Already processed" }, { status: 400 });
-
-    const user = await User.findById(request.userId);
-
-    if (!user)
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
-
-    // Deduct balance
-    if (user.walletBalance < request.amount) {
+    if (!withdrawal) {
       return NextResponse.json(
-        { message: "Insufficient balance" },
+        { success: false, message: "Withdrawal request not found" },
+        { status: 404 }
+      );
+    }
+
+    if (withdrawal.status !== "pending") {
+      return NextResponse.json(
+        { success: false, message: "Already processed" },
         { status: 400 }
       );
     }
 
-    user.walletBalance -= request.amount;
-    await user.save();
+    // ✅ Just approve - amount already deducted during submission
+    withdrawal.status = "approved";
+    await withdrawal.save();
 
-    request.status = "approved";
-    await request.save();
+    console.log(`✅ Withdrawal ${withdrawId} approved - amount was already deducted`);
 
-    return NextResponse.json({ success: true, message: "Withdraw approved!" });
+    return NextResponse.json({ 
+      success: true, 
+      message: "Withdrawal approved successfully!" 
+    });
 
   } catch (error: any) {
-    console.log("APPROVE ERROR:", error);
+    console.error("❌ Approve Error:", error);
     return NextResponse.json(
-      { message: "Server Error", error: error.message },
+      { success: false, message: "Server Error", error: error.message },
       { status: 500 }
     );
   }

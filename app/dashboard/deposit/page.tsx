@@ -1,218 +1,346 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Image from "next/image";
+import React, { useState, useEffect } from 'react';
+import { Loader2, Copy, Upload, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
-export default function DepositPage() {
-  const [settings, setSettings] = useState<any>(null);
-  const [showAddress, setShowAddress] = useState(false);
-  const [timer, setTimer] = useState(1200);
-  const [amount, setAmount] = useState("");
-  const [screenshot, setScreenshot] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+interface DepositConfig {
+  depositAddress: string;
+  qrImage: string;
+  minDeposit: number;
+  network: string;
+}
 
-  // ⭐ NEW: Get user
-  const [user, setUser] = useState<any>(null);
+const DepositPage = () => {
+  const router = useRouter();
+  const [config, setConfig] = useState<DepositConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // ⭐ Fullscreen QR modal
-  const [qrPreview, setQrPreview] = useState<string | null>(null);
-
-  // 🔥 Fetch settings
   useEffect(() => {
-    fetch("/api/settings/get")
-      .then((res) => res.json())
-      .then((data) => setSettings(data.settings));
+    fetchDepositConfig();
   }, []);
 
-  // 🔥 Fetch logged-in user
-  useEffect(() => {
-    fetch("/api/user/me")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.user) setUser(data.user);
-      });
-  }, []);
-
-  // ⏳ Timer
-  useEffect(() => {
-    if (showAddress && timer > 0) {
-      const interval = setInterval(() => setTimer((t) => t - 1), 1000);
-      return () => clearInterval(interval);
-    }
-  }, [showAddress, timer]);
-
-  const formatTime = (sec: number) =>
-    `${Math.floor(sec / 60)}:${("0" + (sec % 60)).slice(-2)}`;
-
-  // 📩 Submit Deposit
-  const submitDeposit = async () => {
-    if (!amount) return alert("Enter amount");
-    if (!screenshot) return alert("Upload screenshot");
-    if (!user?._id) return alert("User not authenticated");
-
-    const formData = new FormData();
-    formData.append("amount", amount);
-    formData.append("screenshot", screenshot);
-    formData.append("userId", user._id); // 🔥 CRITICAL FIX
-
-    setLoading(true);
-    const res = await fetch("/api/deposit", {
-      method: "POST",
-      body: formData,
-    });
-    setLoading(false);
-
-    const data = await res.json();
-
-    if (res.ok) {
-      alert("Deposit Request Submitted Successfully!");
-      setAmount("");
-      setScreenshot(null);
-      setShowAddress(false);
-      setTimer(1200);
-    } else {
-      alert("Error: " + data.message);
+  const fetchDepositConfig = async () => {
+    try {
+      const response = await fetch('/api/settings/get');
+      const data = await response.json();
+      if (data.success) {
+        setConfig(data.settings);
+      } else {
+        setError(data.message || "Unable to load settings");
+      }
+    } catch (err) {
+      setError("Error loading deposit information");
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!settings)
-    return <p className="text-white text-center mt-10">Loading Settings...</p>;
+  const copyToClipboard = (text: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopyStatus(true);
+        setTimeout(() => setCopyStatus(false), 2000);
+      });
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setSubmitError('File size must be less than 5MB');
+        return;
+      }
+      setProofFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setPreviewUrl(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setSubmitError(null);
+
+    if (!amount || parseFloat(amount) < (config?.minDeposit || 0)) {
+      setSubmitError(`Minimum deposit: ${config?.minDeposit} USDT`);
+      return;
+    }
+    if (!proofFile || !previewUrl) {
+      setSubmitError('Please upload payment proof');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const response = await fetch('/api/deposit/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+          proofImage: previewUrl,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSubmitSuccess(true);
+        setTimeout(() => {
+          router.push('/dashboard/deposit-history');
+        }, 2000);
+      } else {
+        setSubmitError(data.message || 'Failed to submit deposit');
+        setSubmitting(false);
+      }
+    } catch (err) {
+      setSubmitError('Network error. Please try again.');
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-600 mx-auto mb-3" />
+          <p className="text-gray-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !config) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-pink-50 p-4">
+        <div className="bg-white p-6 rounded-2xl shadow-xl border-l-4 border-red-500 max-w-sm w-full">
+          <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
+          <h3 className="text-lg font-bold text-gray-900 mb-1">Error</h3>
+          <p className="text-gray-600 text-sm">{error || "Unable to load deposit settings"}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (submitSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-50 p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-sm w-full">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-12 h-12 text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Success!</h2>
+          <p className="text-gray-600 text-sm mb-1">Deposit request submitted</p>
+          <p className="text-xs text-gray-500">Redirecting to history...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen text-white flex justify-center p-6">
-      <div className="bg-[#0d1117] p-8 rounded-2xl w-full max-w-3xl">
-
-        {/* LOGO */}
-        <div className="flex justify-center mb-6">
-          <Image src="/logo.png" width={120} height={120} alt="StakeVault" />
-        </div>
-
-        <h1 className="text-4xl font-bold text-center mb-6">💰 Deposit Funds</h1>
-
-        <p className="text-lg"><b>Minimum:</b> $20</p>
-        <p className="text-lg mb-6"><b>Maximum:</b> Unlimited</p>
-
-        {!showAddress && (
-          <button
-            onClick={() => setShowAddress(true)}
-            className="w-full bg-blue-600 py-4 rounded-xl text-lg"
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      
+      {/* Professional Header with Gradient */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-5 sticky top-0 z-10 shadow-lg">
+        <div className="flex items-center gap-3 mb-1">
+          <button 
+            onClick={() => router.back()}
+            className="p-2 hover:bg-white/10 rounded-lg transition active:scale-95"
           >
-            Request Deposit Address
+            <ArrowLeft className="w-5 h-5 text-white" />
           </button>
-        )}
-
-        {showAddress && (
-          <div className="mt-6 p-5 bg-black/40 border rounded-xl">
-
-            <p className="text-sm mb-2">Your Deposit Address (TRC20):</p>
-
-            {/* ADDRESS FIELD */}
-            <div className="flex items-center bg-gray-900 p-3 rounded-xl">
-              <input
-                value={settings.depositAddress}
-                readOnly
-                className="w-full bg-transparent outline-none text-white"
-              />
-              <button
-                className="ml-2 bg-blue-500 px-3 py-1 rounded-lg"
-                onClick={() => {
-                  navigator.clipboard.writeText(settings.depositAddress);
-                  alert("Address Copied!");
-                }}
-              >
-                Copy
-              </button>
-            </div>
-
-            {/* QR IMAGE (Tap to enlarge) */}
-            <div className="flex justify-center my-4">
-              {settings.qrImage ? (
-                <img
-                  src={
-                    settings.qrImage.startsWith("/")
-                      ? settings.qrImage
-                      : "/" + settings.qrImage
-                  }
-                  width={180}
-                  height={180}
-                  alt="QR Code"
-                  onClick={() =>
-                    setQrPreview(
-                      settings.qrImage.startsWith("/")
-                        ? settings.qrImage
-                        : "/" + settings.qrImage
-                    )
-                  }
-                  className="cursor-pointer rounded-xl shadow-lg hover:scale-105 transition-all"
-                />
-              ) : (
-                <p>No QR Uploaded</p>
-              )}
-            </div>
-
-            {/* TIMER */}
-            <p className="text-yellow-400 text-center mb-4">
-              ⏳ Address valid for: {formatTime(timer)}
-            </p>
-
-            {/* AMOUNT */}
-            <input
-              type="number"
-              placeholder="Enter amount"
-              className="w-full p-3 bg-gray-900 rounded-xl mb-4"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-
-            {/* SCREENSHOT */}
-            <input
-              type="file"
-              accept="image/*"
-              className="w-full bg-gray-800 p-3 rounded-xl mb-4"
-              onChange={(e) => setScreenshot(e.target.files?.[0] || null)}
-            />
-
-            {/* SUBMIT */}
-            <button
-              onClick={submitDeposit}
-              disabled={loading}
-              className="w-full bg-blue-600 py-4 rounded-xl text-lg"
-            >
-              {loading ? "Submitting..." : "Submit Deposit Request"}
-            </button>
+          <div>
+            <h1 className="text-xl font-bold text-white">Deposit USDT</h1>
+            <p className="text-xs text-blue-100">TRC20 Network Only</p>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* ⭐ Fullscreen QR Preview Modal */}
-      {qrPreview && (
-        <div
-          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 cursor-pointer"
-          onClick={() => setQrPreview(null)}
-        >
-          <img
-            src={qrPreview}
-            alt="QR Preview"
-            className="max-w-full max-h-full object-contain rounded-2xl animate-zoom"
-          />
+      <div className="p-4 space-y-4 pb-28">
+        
+        {/* Error Alert */}
+        {submitError && (
+          <div className="bg-red-50 border-l-4 border-red-500 rounded-r-xl p-4 flex items-start gap-3 animate-shake">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-900">Error</p>
+              <p className="text-xs text-red-700 mt-0.5">{submitError}</p>
+            </div>
+          </div>
+        )}
 
-          <style jsx>{`
-            @keyframes zoom {
-              0% {
-                opacity: 0;
-                transform: scale(0.7);
-              }
-              100% {
-                opacity: 1;
-                transform: scale(1);
-              }
-            }
-            .animate-zoom {
-              animation: zoom 0.25s ease-out;
-            }
-          `}</style>
+        {/* Info Cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <p className="text-xs text-gray-500 mb-1">Network</p>
+            <p className="text-sm font-bold text-gray-900">{config.network}</p>
+          </div>
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <p className="text-xs text-gray-500 mb-1">Min. Deposit</p>
+            <p className="text-sm font-bold text-green-600">{config.minDeposit} USDT</p>
+          </div>
         </div>
-      )}
+
+        {/* QR Code Section */}
+        <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100">
+          <div className="flex justify-center mb-4">
+            <div className="p-3 bg-gray-50 rounded-2xl border-2 border-gray-200">
+              <img 
+                src={config.qrImage} 
+                alt="QR" 
+                className="w-44 h-44 rounded-xl"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = "https://placehold.co/400x400/e5e7eb/6b7280?text=QR";
+                }}
+              />
+            </div>
+          </div>
+          
+          {/* Address with Professional Copy */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
+            <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+              Deposit Address
+            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-mono text-gray-800 flex-1 break-all leading-relaxed">
+                {config.depositAddress}
+              </p>
+              <button
+                onClick={() => copyToClipboard(config.depositAddress)}
+                className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
+                  copyStatus 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {copyStatus ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Amount Input */}
+        <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100">
+          <label className="text-sm font-bold text-gray-800 mb-3 block flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+            Enter Amount
+          </label>
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={`Minimum ${config.minDeposit}`}
+              className="w-full px-5 py-4 text-lg font-semibold text-gray-900 placeholder-gray-400 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none bg-gray-50 transition"
+            />
+            <span className="absolute right-5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-500 bg-gray-200 px-3 py-1 rounded-lg">
+              USDT
+            </span>
+          </div>
+        </div>
+
+        {/* Upload Proof */}
+        <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100">
+          <label className="text-sm font-bold text-gray-800 mb-3 block flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+            Payment Proof
+          </label>
+          
+          {!previewUrl ? (
+            <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-blue-500 bg-gradient-to-br from-gray-50 to-blue-50 transition group">
+              <div className="p-3 bg-blue-100 rounded-full mb-2 group-hover:bg-blue-200 transition">
+                <Upload className="w-6 h-6 text-blue-600" />
+              </div>
+              <span className="text-sm font-semibold text-gray-700">Tap to Upload</span>
+              <span className="text-xs text-gray-500 mt-1">PNG, JPG • Max 5MB</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+          ) : (
+            <div className="relative">
+              <img 
+                src={previewUrl} 
+                alt="Proof" 
+                className="w-full h-48 object-cover rounded-xl border-2 border-gray-200"
+              />
+              <button
+                onClick={() => {
+                  setProofFile(null);
+                  setPreviewUrl(null);
+                }}
+                className="absolute top-3 right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold shadow-lg hover:bg-red-600 active:scale-95 transition"
+              >
+                ×
+              </button>
+              <div className="mt-3 flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-2">
+                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                <p className="text-xs font-medium text-green-800 truncate">{proofFile?.name}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Warning Box */}
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 rounded-r-xl p-4">
+          <div className="flex gap-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+              <span className="text-amber-600 font-bold text-lg">⚠️</span>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-900 mb-1">Important Notice</p>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Only send USDT via <strong>TRC20</strong> network to this address. 
+                Wrong network = <strong>permanent loss of funds</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Fixed Bottom Button - Professional */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-2xl">
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !amount || !proofFile}
+          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-700 hover:to-indigo-700 active:scale-98 shadow-lg flex items-center justify-center gap-2 transition-all"
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Processing...</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle className="w-5 h-5" />
+              <span>Submit Deposit Request</span>
+            </>
+          )}
+        </button>
+        <p className="text-center text-xs text-gray-500 mt-2">
+          Deposits are processed within 10-30 minutes
+        </p>
+      </div>
+
     </div>
   );
-}
+};
+
+export default DepositPage;

@@ -1,21 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-// Firebase imports ko sahi rakha gaya hai
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, getDoc, Firestore } from 'firebase/firestore'; // Firestore type import kiya
-import { Loader2, Zap, Copy, QrCode } from 'lucide-react';
+import { Loader2, Copy, Upload, CheckCircle, AlertCircle } from 'lucide-react';
 
-// 1. Zaroori Global Variables ke liye Type Declaration
-// Yeh step 'Cannot find name' errors ko fix karta hai
-declare global {
-  var __app_id: string;
-  var __firebase_config: string;
-  var __initial_auth_token: string;
-}
-
-// 2. docSnap.data() error ko fix karne ke liye Interface define karte hain
 interface DepositConfig {
   depositAddress: string;
   qrImage: string;
@@ -23,248 +10,259 @@ interface DepositConfig {
   network: string;
 }
 
-const initialConfig: DepositConfig = {
-  depositAddress: 'Loading...',
-  qrImage: 'https://placehold.co/400x400/eeeeee/000000?text=QR+Code',
-  minDeposit: 0,
-  network: 'Loading...',
-};
-
-const App = () => {
-  // state mein DepositConfig type ka istemal karte hain
-  const [config, setConfig] = useState<DepositConfig>(initialConfig);
+const DepositPage = () => {
+  const [config, setConfig] = useState<DepositConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [copyStatus, setCopyStatus] = useState('');
-
-  // Global variables ko directly use kar sakte hain kyunki humne unhe declare kar diya hai
-  const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-  const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+  const [copyStatus, setCopyStatus] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   useEffect(() => {
-    if (!firebaseConfig) {
-      setError("Firebase config available nahi hai. Configuration check karein.");
-      setLoading(false);
-      return;
-    }
+    fetchDepositConfig();
+  }, []);
 
-    let auth;
-    let db: Firestore; // TypeScript ke liye type define kiya
-    let unsubscribe = () => {};
-
+  const fetchDepositConfig = async () => {
     try {
-      const app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-
-      const authenticate = async () => {
-        try {
-          if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-          } else {
-            await signInAnonymously(auth);
-          }
-        } catch (authError) {
-          console.error("Authentication Error:", authError);
-          // Agar custom token fail ho jaye, to anonymous sign-in try karein
-          await signInAnonymously(auth);
-        }
-      };
-
-      unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (user) {
-          setUserId(user.uid);
-          // Auth ke baad hi fetch karein
-          fetchDepositConfig(db, user.uid);
-        } else {
-          authenticate();
-        }
-      });
-      
-      authenticate();
-
-    } catch (e) {
-      console.error("Firebase Initialization Error:", e);
-      // Agar 'e' Error type ka hai to uska message use karein
-      setError(`Firebase initialize nahi ho paya. Error: ${e instanceof Error ? e.message : String(e)}`);
-      setLoading(false);
-    }
-    
-    return () => unsubscribe();
-  }, []); 
-
-  // Firestore se deposit settings fetch karein
-  // dbInstance ko explicit 'Firestore' type diya
-  const fetchDepositConfig = async (dbInstance: Firestore, currentUserId: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Path: /artifacts/{appId}/public/data/settings/deposit_config
-      const docPath = `/artifacts/${appId}/public/data/settings/deposit_config`;
-      const configDocRef = doc(dbInstance, docPath);
-
-      const docSnap = await getDoc(configDocRef);
-
-      if (docSnap.exists()) {
-        // docSnap.data() ko DepositConfig type mein cast kiya
-        setConfig(docSnap.data() as DepositConfig);
+      const response = await fetch('/api/settings/get');
+      const data = await response.json();
+      if (data.success) {
+        setConfig(data.settings);
       } else {
-        setError("Deposit config document nahi mila. Firestore path check karein.");
+        setError(data.message || "Unable to load settings");
       }
-    } catch (fetchError) {
-      console.error("Firestore Fetch Error:", fetchError);
-      setError("Data fetch karte waqt error aaya.");
+    } catch (err) {
+      setError("Error loading deposit information");
     } finally {
       setLoading(false);
     }
   };
 
-  // Clipboard mein copy karne ka function
   const copyToClipboard = (text: string) => {
-    // navigator.clipboard ki availability check ki
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(() => {
-          setCopyStatus('Address Copy Ho Gaya!');
-          setTimeout(() => setCopyStatus(''), 2000);
-        }).catch(err => {
-            console.error("Clipboard API failed, falling back:", err);
-            fallbackCopy(text);
-        });
-    } else {
-        fallbackCopy(text);
+      navigator.clipboard.writeText(text).then(() => {
+        setCopyStatus(true);
+        setTimeout(() => setCopyStatus(false), 2000);
+      });
     }
   };
-  
-  const fallbackCopy = (text: string) => {
-      const el = document.createElement('textarea');
-      el.value = text;
-      // Zaroori style lagayein taaki element dikhe nahi
-      el.style.position = 'absolute';
-      el.style.left = '-9999px';
-      document.body.appendChild(el);
-      el.select();
-      // Use execCommand for broader support in iframe environments
-      document.execCommand('copy'); 
-      document.body.removeChild(el);
-      setCopyStatus('Address Copy Ho Gaya! (Fallback)');
-      setTimeout(() => setCopyStatus(''), 2000);
-  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+      setProofFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setPreviewUrl(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!amount || parseFloat(amount) < (config?.minDeposit || 0)) {
+      alert(`Minimum deposit: ${config?.minDeposit} USDT`);
+      return;
+    }
+    if (!proofFile) {
+      alert('Please upload payment proof');
+      return;
+    }
+
+    setSubmitting(true);
+    // Simulate API call
+    setTimeout(() => {
+      setSubmitSuccess(true);
+      setSubmitting(false);
+    }, 1500);
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
-        <p className="mt-4 text-gray-700 font-medium">Data Load Ho Raha Hai...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
-  if (error) {
+  if (error || !config) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
-        <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
-          <h2 className="text-xl font-bold text-red-600 mb-2">Error Aaya!</h2>
-          <p className="text-gray-700">{error}</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-red-500 max-w-sm w-full">
+          <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+          <p className="text-gray-700 font-medium">{error || "Error loading data"}</p>
         </div>
       </div>
     );
   }
 
-  // Helper function to handle image error with proper TypeScript type checking
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    // 3. Image error fix: Event type ko React.SyntheticEvent<HTMLImageElement> mein cast kiya
-    const target = e.target as HTMLImageElement;
-    target.onerror = null; 
-    target.src = "https://placehold.co/400x400/94A3B8/ffffff?text=Image+Nahi+Mili";
-  };
+  if (submitSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-sm w-full">
+          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Submitted!</h2>
+          <p className="text-gray-600 text-sm mb-4">Your deposit request is being processed</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium"
+          >
+            Make Another Deposit
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-8">
-      <div className="max-w-xl mx-auto bg-white rounded-3xl shadow-2xl p-6 sm:p-10">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-4 sticky top-0 z-10">
+        <h1 className="text-xl font-bold text-gray-900">Deposit USDT</h1>
+        <p className="text-xs text-gray-500 mt-0.5">TRC20 Network</p>
+      </div>
+
+      <div className="p-4 space-y-4 pb-24">
         
-        {/* Header */}
-        <div className="text-center mb-8">
-          <Zap className="w-8 h-8 text-indigo-600 mx-auto mb-2" />
-          <h1 className="text-3xl font-extrabold text-gray-900">Deposit Karein</h1>
-          <p className="text-gray-500 mt-1">Apna fund transfer karne ke liye neeche di gayi details istemal karein.</p>
+        {/* Network Info */}
+        <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-gray-600">Network</span>
+            <span className="text-sm font-bold text-gray-900">{config.network}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">Min. Deposit</span>
+            <span className="text-sm font-bold text-green-600">{config.minDeposit} USDT</span>
+          </div>
         </div>
-        
-        {/* QR Code Section */}
-        <div className="flex justify-center mb-8">
-          <div className="p-4 border border-gray-200 rounded-xl bg-white shadow-inner">
+
+        {/* QR Code */}
+        <div className="bg-white rounded-lg p-4 shadow-sm">
+          <p className="text-xs text-gray-500 mb-3 text-center">Scan QR Code</p>
+          <div className="flex justify-center mb-3">
             <img 
               src={config.qrImage} 
-              alt="Deposit QR Code" 
-              className="w-full max-w-xs h-auto rounded-lg object-contain"
-              onError={handleImageError} // Image error ke liye naya handler use kiya
+              alt="QR" 
+              className="w-48 h-48 rounded-lg border border-gray-200"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = "https://placehold.co/400x400/e5e7eb/6b7280?text=QR";
+              }}
             />
           </div>
-        </div>
-
-        {/* Details Section */}
-        <div className="space-y-4">
           
-          {/* Network Detail */}
-          <DetailCard title="Network Type" value={config.network} icon={QrCode} color="bg-blue-50/text-blue-700" />
-
-          {/* Deposit Address Detail */}
-          <div className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-medium text-gray-600 flex items-center">
-                <Copy className="w-4 h-4 mr-2 text-indigo-500" />
-                Deposit Address
-              </h3>
-              <button 
+          {/* Address */}
+          <div className="bg-gray-50 rounded-lg p-3">
+            <p className="text-xs text-gray-500 mb-2">Deposit Address</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-mono text-gray-900 flex-1 break-all">
+                {config.depositAddress}
+              </p>
+              <button
                 onClick={() => copyToClipboard(config.depositAddress)}
-                className="text-xs font-semibold px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition"
+                className="flex-shrink-0 bg-blue-600 text-white px-3 py-2 rounded text-xs font-medium active:bg-blue-700"
               >
-                {copyStatus || 'Copy Karein'}
+                {copyStatus ? '✓' : <Copy className="w-3.5 h-3.5" />}
               </button>
             </div>
-            <p className="text-sm sm:text-base font-mono break-all bg-gray-50 p-2 rounded-lg text-gray-800">
-              {config.depositAddress}
-            </p>
           </div>
-
-          {/* Min Deposit Detail */}
-          <DetailCard title="Minimum Deposit" value={`${config.minDeposit} USDT`} icon={Zap} color="bg-green-50/text-green-700" />
-          
         </div>
-        
-        {/* Footer Note */}
-        <div className="mt-8 pt-6 border-t border-gray-100 text-center">
-          <p className="text-xs text-red-500 font-medium">
-            Zaroori: Sirf USDT (TRC20) network se transfer karein. Galat network se bheja gaya fund kho sakta hai.
-          </p>
-          <p className="text-xs text-gray-400 mt-2">
-            User ID: {userId || 'Nahi Mila'} | App ID: {appId}
+
+        {/* Amount Input */}
+        <div className="bg-white rounded-lg p-4 shadow-sm">
+          <label className="text-sm font-medium text-gray-700 mb-2 block">
+            Deposit Amount
+          </label>
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={`Min ${config.minDeposit}`}
+              className="w-full px-4 py-3 text-base text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500 font-medium">
+              USDT
+            </span>
+          </div>
+        </div>
+
+        {/* Upload Proof */}
+        <div className="bg-white rounded-lg p-4 shadow-sm">
+          <label className="text-sm font-medium text-gray-700 mb-3 block">
+            Payment Proof
+          </label>
+          
+          {!previewUrl ? (
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 bg-gray-50">
+              <Upload className="w-8 h-8 text-gray-400 mb-2" />
+              <span className="text-sm text-gray-600">Upload Screenshot</span>
+              <span className="text-xs text-gray-400 mt-1">PNG, JPG (Max 5MB)</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+          ) : (
+            <div className="relative">
+              <img 
+                src={previewUrl} 
+                alt="Proof" 
+                className="w-full h-40 object-cover rounded-lg border border-gray-200"
+              />
+              <button
+                onClick={() => {
+                  setProofFile(null);
+                  setPreviewUrl(null);
+                }}
+                className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-lg font-bold"
+              >
+                ×
+              </button>
+              <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                {proofFile?.name}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Warning */}
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-xs text-amber-800 leading-relaxed">
+            <strong>⚠️ Important:</strong> Only send USDT via TRC20 network. Sending via wrong network will result in loss of funds.
           </p>
         </div>
 
       </div>
+
+      {/* Fixed Bottom Button */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !amount || !proofFile}
+          className="w-full bg-blue-600 text-white font-semibold py-3.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed active:bg-blue-700 flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            'Submit Deposit'
+          )}
+        </button>
+      </div>
+
     </div>
   );
 };
 
-// Reusable card component for details
-// Props ko bhi interface se type kiya
-interface DetailCardProps {
-    title: string;
-    value: string | number;
-    icon: React.ElementType;
-    color: string;
-}
-
-const DetailCard: React.FC<DetailCardProps> = ({ title, value, icon: Icon, color }) => (
-  <div className={`flex justify-between items-center p-4 rounded-xl shadow-sm ${color.split('/')[0]} border border-gray-200`}>
-    <h3 className={`text-sm font-medium flex items-center ${color.split('/')[1]}`}>
-      <Icon className="w-4 h-4 mr-2" />
-      {title}
-    </h3>
-    <p className="text-base font-semibold text-gray-900">{value}</p>
-  </div>
-);
-
-export default App;
+export default DepositPage;
