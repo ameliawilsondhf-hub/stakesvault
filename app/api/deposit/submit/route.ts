@@ -6,6 +6,7 @@ import Deposit from "@/lib/models/deposit";
 import jwt from "jsonwebtoken";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
+import { emailService } from "@/lib/email-service";
 
 export const dynamic = 'force-dynamic';
 
@@ -120,11 +121,30 @@ export async function POST(request: NextRequest) {
       status: "pending",
     });
 
-    // --- 7. Return Success ---
+    // --- 7. Get User for Email ---
+    const user = await User.findById(userId);
+
+    // --- 8. Send Email Notification ---
+    if (user) {
+      try {
+        await emailService.sendDepositReceived(
+          user.email,
+          user.name || user.email,
+          parseFloat(amount),
+          deposit._id.toString()
+        );
+        console.log(`📧 Deposit received email sent to ${user.email}`);
+      } catch (emailError) {
+        console.error("❌ Email sending failed:", emailError);
+        // Don't fail the deposit submission if email fails
+      }
+    }
+
+    // --- 9. Return Success ---
     return NextResponse.json(
       {
         success: true,
-        message: "Deposit request submitted successfully",
+        message: "Deposit request submitted successfully. You will receive a confirmation email shortly.",
         depositId: deposit._id,
       },
       { status: 201 }

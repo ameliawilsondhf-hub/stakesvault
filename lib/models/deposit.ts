@@ -8,6 +8,13 @@ export interface IDeposit extends Document {
   screenshot: string | null;
   transactionId: string | null;
   adminNote: string | null;
+  // Approval fields
+  approvedAt?: Date;
+  approvedBy?: mongoose.Types.ObjectId;
+  // Rejection fields
+  rejectedAt?: Date;
+  rejectedBy?: mongoose.Types.ObjectId;
+  rejectionReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +28,7 @@ const depositSchema = new Schema<IDeposit>(
       required: true,
       index: true,
     },
+    
     amount: {
       type: Number,
       required: true,
@@ -43,6 +51,25 @@ const depositSchema = new Schema<IDeposit>(
     adminNote: {
       type: String,
       default: null,
+    },
+    // Approval fields
+    approvedAt: {
+      type: Date,
+    },
+    approvedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    // Rejection fields
+    rejectedAt: {
+      type: Date,
+    },
+    rejectedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    rejectionReason: {
+      type: String,
     },
   },
   {

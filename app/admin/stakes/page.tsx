@@ -8,14 +8,20 @@ interface Stake {
     _id: string;
     name: string;
     email: string;
+    walletBalance?: number;
+    stakedBalance?: number;
   };
   amount: number;
+  originalAmount: number;
+  currentAmount: number;
   stakedAt: string;
   unlockDate: string;
   lockPeriod: number;
   status: 'active' | 'completed' | 'withdrawn';
   apy: number;
   earnedRewards: number;
+  totalProfit: number;
+  cycle: number;
 }
 
 export default function AdminStakesPage() {
@@ -52,6 +58,23 @@ export default function AdminStakesPage() {
     }
   };
 
+  // ⭐ Calculation Functions
+  const calculateCurrentBalance = (originalAmount: number, stakedAt: string) => {
+    const daysPassed = Math.floor(
+      (new Date().getTime() - new Date(stakedAt).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return originalAmount * Math.pow(1.01, daysPassed);
+  };
+
+  const calculateDailyEarnings = (currentBalance: number) => {
+    return currentBalance * 0.01; // 1% daily
+  };
+
+  const calculateTotalEarned = (originalAmount: number, stakedAt: string) => {
+    const currentBalance = calculateCurrentBalance(originalAmount, stakedAt);
+    return currentBalance - originalAmount;
+  };
+
   // Filter by status
   const filteredByStatus = stakes.filter(stake => {
     if (filter === 'all') return true;
@@ -79,10 +102,30 @@ export default function AdminStakesPage() {
     setCurrentPage(1);
   }, [filter, searchQuery]);
 
-  const totalStaked = stakes.reduce((sum, s) => sum + s.amount, 0);
-  const totalRewards = stakes.reduce((sum, s) => sum + s.earnedRewards, 0);
+  // ⭐ Enhanced Statistics
+  const totalStaked = stakes.reduce((sum, s) => sum + (s.originalAmount || s.amount), 0);
+  const totalCurrentValue = stakes.reduce((sum, s) => {
+    if (s.status === 'active') {
+      return sum + calculateCurrentBalance(s.originalAmount || s.amount, s.stakedAt);
+    }
+    return sum + (s.originalAmount || s.amount);
+  }, 0);
+  const totalEarnings = stakes.reduce((sum, s) => {
+    if (s.status === 'active') {
+      return sum + calculateTotalEarned(s.originalAmount || s.amount, s.stakedAt);
+    }
+    return sum + (s.earnedRewards || 0);
+  }, 0);
+  const totalDailyPayouts = stakes
+    .filter(s => s.status === 'active')
+    .reduce((sum, s) => {
+      const current = calculateCurrentBalance(s.originalAmount || s.amount, s.stakedAt);
+      return sum + calculateDailyEarnings(current);
+    }, 0);
+
   const activeStakes = stakes.filter(s => s.status === 'active').length;
   const completedStakes = stakes.filter(s => s.status === 'completed').length;
+  const totalUsers = new Set(stakes.map(s => s.userId?._id)).size;
 
   if (loading) {
     return (
@@ -149,29 +192,70 @@ export default function AdminStakesPage() {
           <h1 className="text-4xl text-white font-bold flex items-center gap-3">
             🔒 Staking Dashboard
           </h1>
-          <p className="text-gray-300">Manage all user stakes</p>
+          <p className="text-gray-300">Manage all user stakes • Live Data</p>
         </div>
 
-        {/* STATS */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-green-600/25 border border-green-500/40 p-6 rounded-xl backdrop-blur-xl">
-            <p className="text-green-300 text-sm">Total Staked</p>
+        {/* ⭐ ENHANCED STATS - 2 Rows */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="bg-gradient-to-br from-blue-600/30 to-blue-800/30 border border-blue-500/40 p-6 rounded-xl backdrop-blur-xl">
+            <p className="text-blue-300 text-sm flex items-center gap-2">
+              <span>👥</span> Total Users
+            </p>
+            <p className="text-3xl font-bold text-white">{totalUsers}</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-green-600/30 to-green-800/30 border border-green-500/40 p-6 rounded-xl backdrop-blur-xl">
+            <p className="text-green-300 text-sm flex items-center gap-2">
+              <span>💰</span> Original Staked
+            </p>
             <p className="text-3xl font-bold text-white">${totalStaked.toFixed(2)}</p>
           </div>
 
-          <div className="bg-blue-600/25 border border-blue-500/40 p-6 rounded-xl backdrop-blur-xl">
-            <p className="text-blue-300 text-sm">Active Stakes</p>
+          <div className="bg-gradient-to-br from-cyan-600/30 to-cyan-800/30 border border-cyan-500/40 p-6 rounded-xl backdrop-blur-xl">
+            <p className="text-cyan-300 text-sm flex items-center gap-2">
+              <span>📈</span> Current Value (TVL)
+            </p>
+            <p className="text-3xl font-bold text-white">${totalCurrentValue.toFixed(2)}</p>
+            <p className="text-xs text-cyan-400 mt-1">With Compound Interest</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-emerald-600/30 to-emerald-800/30 border border-emerald-500/40 p-6 rounded-xl backdrop-blur-xl">
+            <p className="text-emerald-300 text-sm flex items-center gap-2">
+              <span>✨</span> Total Earnings
+            </p>
+            <p className="text-3xl font-bold text-white">+${totalEarnings.toFixed(2)}</p>
+            <p className="text-xs text-emerald-400 mt-1">Platform Profit Generated</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gradient-to-br from-orange-600/30 to-orange-800/30 border border-orange-500/40 p-6 rounded-xl backdrop-blur-xl">
+            <p className="text-orange-300 text-sm flex items-center gap-2">
+              <span>🔥</span> Active Stakes
+            </p>
             <p className="text-3xl font-bold text-white">{activeStakes}</p>
           </div>
 
-          <div className="bg-purple-600/25 border border-purple-500/40 p-6 rounded-xl backdrop-blur-xl">
-            <p className="text-purple-300 text-sm">Completed</p>
+          <div className="bg-gradient-to-br from-purple-600/30 to-purple-800/30 border border-purple-500/40 p-6 rounded-xl backdrop-blur-xl">
+            <p className="text-purple-300 text-sm flex items-center gap-2">
+              <span>✅</span> Completed
+            </p>
             <p className="text-3xl font-bold text-white">{completedStakes}</p>
           </div>
 
-          <div className="bg-yellow-600/25 border border-yellow-500/40 p-6 rounded-xl backdrop-blur-xl">
-            <p className="text-yellow-300 text-sm">Total Rewards</p>
-            <p className="text-3xl font-bold text-white">${totalRewards.toFixed(2)}</p>
+          <div className="bg-gradient-to-br from-yellow-600/30 to-yellow-800/30 border border-yellow-500/40 p-6 rounded-xl backdrop-blur-xl">
+            <p className="text-yellow-300 text-sm flex items-center gap-2">
+              <span>💸</span> Daily Payouts
+            </p>
+            <p className="text-3xl font-bold text-white">${totalDailyPayouts.toFixed(2)}</p>
+            <p className="text-xs text-yellow-400 mt-1">Compounding Daily (1%)</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-pink-600/30 to-pink-800/30 border border-pink-500/40 p-6 rounded-xl backdrop-blur-xl">
+            <p className="text-pink-300 text-sm flex items-center gap-2">
+              <span>📊</span> Total Stakes
+            </p>
+            <p className="text-3xl font-bold text-white">{stakes.length}</p>
           </div>
         </div>
 
@@ -213,7 +297,7 @@ export default function AdminStakesPage() {
               filter === 'active' ? 'bg-green-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
             }`}
           >
-            Active ({activeStakes})
+            🔥 Active ({activeStakes})
           </button>
           <button
             onClick={() => setFilter('completed')}
@@ -221,7 +305,7 @@ export default function AdminStakesPage() {
               filter === 'completed' ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
             }`}
           >
-            Completed ({completedStakes})
+            ✅ Completed ({completedStakes})
           </button>
         </div>
 
@@ -237,10 +321,13 @@ export default function AdminStakesPage() {
               <thead className="bg-white/10 sticky top-0">
                 <tr>
                   <th className="p-4 text-left">User</th>
-                  <th className="p-4 text-left">Amount</th>
-                  <th className="p-4 text-left">Lock Period</th>
+                  <th className="p-4 text-left">Original</th>
+                  <th className="p-4 text-left">Current</th>
+                  <th className="p-4 text-left">Daily</th>
+                  <th className="p-4 text-left">Earned</th>
+                  <th className="p-4 text-left">Lock</th>
                   <th className="p-4 text-left">APY</th>
-                  <th className="p-4 text-left">Rewards</th>
+                  <th className="p-4 text-left">Cycle</th>
                   <th className="p-4 text-left">Status</th>
                   <th className="p-4 text-left">Staked At</th>
                   <th className="p-4 text-left">Days Left</th>
@@ -250,47 +337,72 @@ export default function AdminStakesPage() {
               <tbody>
                 {paginatedStakes.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-gray-400">
+                    <td colSpan={11} className="p-8 text-center text-gray-400">
                       {searchQuery ? 'No stakes found for this search' : 'No stakes found'}
                     </td>
                   </tr>
                 ) : (
-                  paginatedStakes.map((stake) => (
-                    <tr key={stake._id} className="border-b border-white/10 hover:bg-white/5 transition-colors">
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold">
-                            {stake.userId?.name?.charAt(0).toUpperCase() || 'U'}
+                  paginatedStakes.map((stake) => {
+                    const originalAmount = stake.originalAmount || stake.amount;
+                    const currentBalance = stake.status === 'active' 
+                      ? calculateCurrentBalance(originalAmount, stake.stakedAt)
+                      : originalAmount;
+                    const dailyEarning = stake.status === 'active' 
+                      ? calculateDailyEarnings(currentBalance)
+                      : 0;
+                    const totalEarned = stake.status === 'active'
+                      ? calculateTotalEarned(originalAmount, stake.stakedAt)
+                      : stake.earnedRewards || 0;
+
+                    return (
+                      <tr key={stake._id} className="border-b border-white/10 hover:bg-white/5 transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold text-sm">
+                              {stake.userId?.name?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm">{stake.userId?.name || 'Unknown'}</p>
+                              <p className="text-gray-400 text-xs">{stake.userId?.email || 'N/A'}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-bold">{stake.userId?.name || 'Unknown'}</p>
-                            <p className="text-gray-400 text-sm">{stake.userId?.email || 'N/A'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-4 text-green-400 font-bold">${stake.amount.toFixed(2)}</td>
-                      <td className="p-4 text-blue-300">{stake.lockPeriod} days</td>
-                      <td className="p-4 text-yellow-300 font-bold">{stake.apy}%</td>
-                      <td className="p-4 text-green-300 font-bold">${stake.earnedRewards.toFixed(2)}</td>
-                      <td className="p-4">
-                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                          stake.status === 'active' ? 'bg-green-600/20 text-green-300' :
-                          stake.status === 'completed' ? 'bg-blue-600/20 text-blue-300' :
-                          'bg-gray-600/20 text-gray-300'
-                        }`}>
-                          {stake.status.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="p-4 text-gray-300 text-sm">{formatDate(stake.stakedAt)}</td>
-                      <td className="p-4">
-                        {stake.status === 'active' ? (
-                          <span className="text-yellow-300 font-bold">{getDaysRemaining(stake.unlockDate)} days</span>
-                        ) : (
-                          <span className="text-gray-500">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="p-4 text-gray-300 font-semibold text-sm">
+                          ${originalAmount.toFixed(2)}
+                        </td>
+                        <td className="p-4 text-blue-400 font-bold">
+                          ${currentBalance.toFixed(2)}
+                        </td>
+                        <td className="p-4 text-green-400 font-bold text-sm">
+                          {stake.status === 'active' ? `+$${dailyEarning.toFixed(2)}` : '-'}
+                        </td>
+                        <td className="p-4 text-emerald-400 font-bold">
+                          +${totalEarned.toFixed(2)}
+                        </td>
+                        <td className="p-4 text-cyan-300 text-sm">{stake.lockPeriod}d</td>
+                        <td className="p-4 text-yellow-300 font-bold text-sm">{stake.apy}%</td>
+                        <td className="p-4 text-purple-300 font-semibold">#{stake.cycle || 1}</td>
+                        <td className="p-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            stake.status === 'active' ? 'bg-green-600/20 text-green-300 border border-green-500/30' :
+                            stake.status === 'completed' ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30' :
+                            'bg-gray-600/20 text-gray-300 border border-gray-500/30'
+                          }`}>
+                            {stake.status === 'active' ? '🔥 ACTIVE' : 
+                             stake.status === 'completed' ? '✅ DONE' : '📦 WITHDRAWN'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-gray-300 text-xs">{formatDate(stake.stakedAt)}</td>
+                        <td className="p-4">
+                          {stake.status === 'active' ? (
+                            <span className="text-orange-300 font-bold">{getDaysRemaining(stake.unlockDate)}d</span>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -3,6 +3,26 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
+// ⭐ Calculation Functions
+const calculateDailyEarnings = (amount: number) => {
+  return amount * 0.01; // 1% daily
+};
+
+const calculateTotalEarned = (amount: number, stakedAt: string) => {
+  const daysPassed = Math.floor(
+    (new Date().getTime() - new Date(stakedAt).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  const currentAmount = amount * Math.pow(1.01, daysPassed);
+  return currentAmount - amount;
+};
+
+const calculateCurrentBalance = (amount: number, stakedAt: string) => {
+  const daysPassed = Math.floor(
+    (new Date().getTime() - new Date(stakedAt).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  return amount * Math.pow(1.01, daysPassed);
+};
+
 export default function StakeHistoryPage() {
   const [stakes, setStakes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +84,11 @@ export default function StakeHistoryPage() {
   const activeCount = stakes.filter(s => getTimeRemaining(s.unlockDate) !== "Unlocked").length;
   const unlockedCount = stakes.filter(s => getTimeRemaining(s.unlockDate) === "Unlocked").length;
   const totalStaked = stakes.reduce((sum, s) => sum + (s.amount || 0), 0);
+  
+  // ⭐ Calculate total earnings
+  const totalEarnings = stakes.reduce((sum, s) => {
+    return sum + calculateTotalEarned(s.amount, s.stakedAt);
+  }, 0);
 
   if (loading) {
     return (
@@ -103,12 +128,13 @@ export default function StakeHistoryPage() {
             <p className="text-3xl font-bold text-orange-400">{activeCount}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-xl rounded-xl p-5 border border-white/20">
-            <p className="text-gray-400 text-sm mb-1">Unlocked</p>
-            <p className="text-3xl font-bold text-green-400">{unlockedCount}</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-xl rounded-xl p-5 border border-white/20">
             <p className="text-gray-400 text-sm mb-1">Total Staked</p>
             <p className="text-3xl font-bold text-blue-400">${totalStaked.toFixed(2)}</p>
+          </div>
+          {/* ⭐ NEW: Total Earnings Card */}
+          <div className="bg-gradient-to-br from-green-900/50 to-emerald-900/50 backdrop-blur-xl rounded-xl p-5 border border-green-500/30">
+            <p className="text-green-300 text-sm mb-1">💰 Total Earnings</p>
+            <p className="text-3xl font-bold text-green-400">+${totalEarnings.toFixed(2)}</p>
           </div>
         </div>
 
@@ -169,60 +195,84 @@ export default function StakeHistoryPage() {
                 <table className="w-full">
                   <thead className="bg-white/5 border-b border-white/20">
                     <tr>
-                      <th className="p-4 text-left font-bold text-gray-300">Amount</th>
+                      <th className="p-4 text-left font-bold text-gray-300">Original</th>
+                      <th className="p-4 text-left font-bold text-gray-300">Current</th>
+                      <th className="p-4 text-left font-bold text-gray-300">Daily</th>
+                      <th className="p-4 text-left font-bold text-gray-300">Earned</th>
                       <th className="p-4 text-left font-bold text-gray-300">APY</th>
-                      <th className="p-4 text-left font-bold text-gray-300">Lock Period</th>
-                      <th className="p-4 text-left font-bold text-gray-300">Staked Date</th>
-                      <th className="p-4 text-left font-bold text-gray-300">Unlock Date</th>
-                      <th className="p-4 text-left font-bold text-gray-300">Time Remaining</th>
+                      <th className="p-4 text-left font-bold text-gray-300">Lock</th>
+                      <th className="p-4 text-left font-bold text-gray-300">Staked</th>
+                      <th className="p-4 text-left font-bold text-gray-300">Unlocks</th>
+                      <th className="p-4 text-left font-bold text-gray-300">Remaining</th>
                       <th className="p-4 text-center font-bold text-gray-300">Status</th>
                       <th className="p-4 text-center font-bold text-gray-300">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredStakes.map((stake: any, idx: number) => (
-                      <tr
-                        key={idx}
-                        className="border-b border-white/10 hover:bg-white/5 transition-colors"
-                      >
-                        <td className="p-4">
-                          <span className="font-bold text-green-400 text-lg">
-                            ${stake.amount?.toFixed(2)}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className="font-semibold text-blue-400">
-                            {stake.apy}%
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className="font-semibold">{stake.lockPeriod} Days</span>
-                        </td>
-                        <td className="p-4 text-gray-300">
-                          {new Date(stake.stakedAt).toLocaleDateString()}
-                        </td>
-                        <td className="p-4 text-gray-300">
-                          {new Date(stake.unlockDate).toLocaleDateString()}
-                        </td>
-                        <td className="p-4">
-                          <span className="font-bold text-orange-400">
-                            {getTimeRemaining(stake.unlockDate)}
-                          </span>
-                        </td>
-                        <td className="p-4 text-center">
-                          {getStatusBadge(stake.unlockDate)}
-                        </td>
-                        <td className="p-4 text-center">
-                          {getTimeRemaining(stake.unlockDate) === "Unlocked" ? (
-                            <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-bold text-sm transition-all">
-                              Withdraw
-                            </button>
-                          ) : (
-                            <span className="text-gray-500 text-sm">Locked</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredStakes.map((stake: any, idx: number) => {
+                      const currentBalance = calculateCurrentBalance(stake.amount, stake.stakedAt);
+                      const dailyEarning = calculateDailyEarnings(currentBalance);
+                      const totalEarned = calculateTotalEarned(stake.amount, stake.stakedAt);
+
+                      return (
+                        <tr
+                          key={idx}
+                          className="border-b border-white/10 hover:bg-white/5 transition-colors"
+                        >
+                          <td className="p-4">
+                            <span className="font-bold text-gray-300 text-lg">
+                              ${stake.amount?.toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="font-bold text-blue-400 text-lg">
+                              ${currentBalance.toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="font-bold text-green-400">
+                              +${dailyEarning.toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="font-bold text-emerald-400">
+                              +${totalEarned.toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="font-semibold text-purple-400">
+                              {stake.apy}%
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="font-semibold">{stake.lockPeriod}d</span>
+                          </td>
+                          <td className="p-4 text-gray-300 text-sm">
+                            {new Date(stake.stakedAt).toLocaleDateString()}
+                          </td>
+                          <td className="p-4 text-gray-300 text-sm">
+                            {new Date(stake.unlockDate).toLocaleDateString()}
+                          </td>
+                          <td className="p-4">
+                            <span className="font-bold text-orange-400">
+                              {getTimeRemaining(stake.unlockDate)}
+                            </span>
+                          </td>
+                          <td className="p-4 text-center">
+                            {getStatusBadge(stake.unlockDate)}
+                          </td>
+                          <td className="p-4 text-center">
+                            {getTimeRemaining(stake.unlockDate) === "Unlocked" ? (
+                              <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-bold text-sm transition-all">
+                                Withdraw
+                              </button>
+                            ) : (
+                              <span className="text-gray-500 text-sm">Locked</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -230,51 +280,80 @@ export default function StakeHistoryPage() {
 
             {/* Mobile Card View */}
             <div className="lg:hidden space-y-4">
-              {filteredStakes.map((stake: any, idx: number) => (
-                <div
-                  key={idx}
-                  className="bg-white/10 backdrop-blur-xl rounded-xl p-5 border border-white/20"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <p className="text-2xl font-bold text-green-400">
-                        ${stake.amount?.toFixed(2)}
-                      </p>
-                      <p className="text-sm text-gray-400">
-                        APY: <span className="text-blue-400 font-semibold">{stake.apy}%</span>
-                      </p>
-                    </div>
-                    {getStatusBadge(stake.unlockDate)}
-                  </div>
+              {filteredStakes.map((stake: any, idx: number) => {
+                const currentBalance = calculateCurrentBalance(stake.amount, stake.stakedAt);
+                const dailyEarning = calculateDailyEarnings(currentBalance);
+                const totalEarned = calculateTotalEarned(stake.amount, stake.stakedAt);
 
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Lock Period:</span>
-                      <span className="font-semibold">{stake.lockPeriod} Days</span>
+                return (
+                  <div
+                    key={idx}
+                    className="bg-white/10 backdrop-blur-xl rounded-xl p-5 border border-white/20"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p className="text-sm text-gray-400">Original Amount</p>
+                        <p className="text-2xl font-bold text-gray-300">
+                          ${stake.amount?.toFixed(2)}
+                        </p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          APY: <span className="text-purple-400 font-semibold">{stake.apy}%</span>
+                        </p>
+                      </div>
+                      {getStatusBadge(stake.unlockDate)}
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Staked:</span>
-                      <span>{new Date(stake.stakedAt).toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Unlocks:</span>
-                      <span>{new Date(stake.unlockDate).toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Time Remaining:</span>
-                      <span className="font-bold text-orange-400">
-                        {getTimeRemaining(stake.unlockDate)}
-                      </span>
-                    </div>
-                  </div>
 
-                  {getTimeRemaining(stake.unlockDate) === "Unlocked" && (
-                    <button className="mt-4 w-full bg-green-600 hover:bg-green-700 py-3 rounded-lg font-bold transition-all">
-                      Withdraw
-                    </button>
-                  )}
-                </div>
-              ))}
+                    {/* ⭐ Earnings Section */}
+                    <div className="grid grid-cols-3 gap-3 mb-4 p-3 bg-white/5 rounded-lg">
+                      <div className="text-center">
+                        <p className="text-xs text-gray-400 mb-1">Current</p>
+                        <p className="text-sm font-bold text-blue-400">
+                          ${currentBalance.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-400 mb-1">Daily</p>
+                        <p className="text-sm font-bold text-green-400">
+                          +${dailyEarning.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-400 mb-1">Earned</p>
+                        <p className="text-sm font-bold text-emerald-400">
+                          +${totalEarned.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Lock Period:</span>
+                        <span className="font-semibold">{stake.lockPeriod} Days</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Staked:</span>
+                        <span>{new Date(stake.stakedAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Unlocks:</span>
+                        <span>{new Date(stake.unlockDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Time Remaining:</span>
+                        <span className="font-bold text-orange-400">
+                          {getTimeRemaining(stake.unlockDate)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {getTimeRemaining(stake.unlockDate) === "Unlocked" && (
+                      <button className="mt-4 w-full bg-green-600 hover:bg-green-700 py-3 rounded-lg font-bold transition-all">
+                        Withdraw
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}

@@ -6,6 +6,7 @@ import Withdraw from "@/lib/models/withdraw";
 import jwt from "jsonwebtoken";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { emailService } from "@/lib/email-service";
 
 export const dynamic = 'force-dynamic';
 
@@ -140,12 +141,28 @@ export async function POST(request: Request) {
       status: "pending",
     });
 
-    // --- 7. Return Success ---
+    // --- 7. Send Email Notification ---
+    try {
+      await emailService.sendWithdrawalReceived(
+        user.email,
+        user.name || user.email,
+        parseFloat(amount),
+        walletAddress.trim(),
+        withdrawal._id.toString()
+      );
+      console.log(`📧 Withdrawal received email sent to ${user.email}`);
+    } catch (emailError) {
+      console.error("❌ Email sending failed:", emailError);
+      // Don't fail the withdrawal submission if email fails
+    }
+
+    // --- 8. Return Success ---
     return NextResponse.json(
       {
         success: true,
-        message: "Withdrawal request submitted. Amount deducted from wallet.",
+        message: "Withdrawal request submitted successfully. Amount deducted from wallet. You will receive a confirmation email shortly.",
         withdrawalId: withdrawal._id,
+        newBalance: user.walletBalance
       },
       { status: 201 }
     );

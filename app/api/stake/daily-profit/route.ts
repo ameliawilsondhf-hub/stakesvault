@@ -1,36 +1,182 @@
 import { NextResponse } from "next/server";
-import connectDB from "@/lib/db";
-
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
+import connectDB from "@/lib/mongodb";
+import User from "@/lib/models/user";
 import Stake from "@/lib/models/stake";
+import { emailService } from "@/lib/email-service";
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
   try {
     await connectDB();
 
-    const stakes = await Stake.find();
+    // 1. Get JWT token from cookie
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
 
-    for (let st of stakes) {
-      if (st.status === "locked") {
-        const today = new Date();
-        const last = new Date(st.lastProfitDate);
+    console.log("🔑 Token:", token ? "Found" : "Missing");
 
-        const diff =
-          today.getDate() !== last.getDate() ||
-          today.getMonth() !== last.getMonth() ||
-          today.getFullYear() !== last.getFullYear();
-
-        if (diff) {
-          let profit = st.amount * 0.01;
-          st.amount += profit;
-          st.totalProfit += profit;
-          st.lastProfitDate = today;
-          await st.save();
-        }
-      }
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: "Not logged in" },
+        { status: 401 }
+      );
     }
 
-    return NextResponse.json({ success: true, msg: "Daily profit added" });
-  } catch (error) {
-    return NextResponse.json({ success: false, error });
+    // 2. Verify JWT token
+    if (!process.env.JWT_SECRET) {
+      console.error("❌ JWT_SECRET missing in .env");
+      return NextResponse.json(
+        { success: false, message: "Server configuration error" },
+        { status: 500 }
+      );
+    }
+
+    let userId;
+    try {
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET);
+      userId = decoded.id;
+      console.log("👤 User ID from JWT:", userId);
+    } catch (jwtError: any) {
+      console.error("❌ JWT Verification Error:", jwtError.message);
+      return NextResponse.json(
+        { success: false, message: "Invalid token" },
+        { status: 401 }
+      );
+    }
+
+    // 3. Get request body
+    const body = await req.json();
+    const amount = body.amount;
+    const lockPeriod = body.lockPeriod || body.days;
+
+    console.log("💰 Stake amount:", amount);
+    console.log("🔒 Lock period:", lockPeriod);
+
+    // 4. Validation
+    if (!amount || amount <= 0) {
+      return NextResponse.json(
+        { success: false, message: "Invalid amount" },
+        { status: 400 }
+      );
+    }
+
+    if (!lockPeriod || ![30, 60, 90].includes(parseInt(lockPeriod))) {
+      return NextResponse.json(
+        { success: false, message: "Invalid lock period. Must be 30, 60, or 90 days." },
+        { status: 400 }
+      );
+    }
+
+    // 5. Find user
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    console.log("💵 Current wallet balance:", user.walletBalance);
+
+    // 6. Check balance
+    if (user.walletBalance < amount) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: "Insufficient wallet balance",
+          available: user.walletBalance,
+          required: amount
+        },
+        { status: 400 }
+      );
+    }
+
+    // 7. Deduct from wallet
+    user.walletBalance -= amount;
+    console.log("✅ Wallet deducted. New balance:", user.walletBalance);
+
+    // 8. Update staked balance
+    user.stakedBalance = (user.stakedBalance || 0) + amount;
+    console.log("✅ Staked balance updated:", user.stakedBalance);
+
+    await user.save();
+
+    // 9. Calculate unlock date
+    const now = new Date();
+    const unlockDate = new Date(now);
+    unlockDate.setDate(unlockDate.getDate() + parseInt(lockPeriod));
+
+    // 10. Create Stake record in Stake model
+    const stake = await Stake.create({
+      userId: userId,
+      originalAmount: amount,
+      currentAmount: amount,
+      startDate: now,
+      unlockDate: unlockDate,
+      lastProfitDate: now,
+      lockPeriod: parseInt(lockPeriod),
+      status: 'locked',
+      totalProfit: 0,
+      profitHistory: [],
+      cycle: 1,
+      autoRelock: true,
+      autoRelockAt: null
+    });
+
+    console.log("✅ Stake record created:", stake._id);
+
+    // 11. Send email notification
+    try {
+      await emailService.sendStakeStarted(
+        user.email,
+        user.name || user.email,
+        amount,
+        parseInt(lockPeriod),
+        unlockDate,
+        stake._id.toString()
+      );
+      console.log(`📧 Stake started email sent to ${user.email}`);
+    } catch (emailError) {
+      console.error("❌ Email sending failed:", emailError);
+      // Don't fail the stake if email fails
+    }
+
+    // 12. Return success
+    return NextResponse.json({
+      success: true,
+      message: "Staking successful! You will receive a confirmation email shortly.",
+      data: {
+        stakeId: stake._id,
+        walletBalance: user.walletBalance,
+        stakedBalance: user.stakedBalance,
+        stake: {
+          amount: stake.currentAmount,
+          lockPeriod: stake.lockPeriod,
+          startDate: stake.startDate,
+          unlockDate: stake.unlockDate,
+          status: stake.status,
+          cycle: stake.cycle
+        }
+      }
+    }, { status: 201 });
+
+  } catch (err: any) {
+    console.error("❌ STAKE CREATE ERROR:", err);
+    console.error("Error name:", err.name);
+    console.error("Error message:", err.message);
+
+    return NextResponse.json(
+      { 
+        success: false, 
+        message: "Server error", 
+        error: err.message,
+        details: process.env.NODE_ENV === "development" ? err.stack : undefined
+      },
+      { status: 500 }
+    );
   }
 }

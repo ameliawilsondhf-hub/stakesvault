@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 export default function AdminWithdrawPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState<string | null>(null);
   const [selectedQR, setSelectedQR] = useState<string | null>(null);
 
   // AUTO REFRESH
@@ -34,26 +35,111 @@ export default function AdminWithdrawPage() {
   };
 
   const approveReq = async (id: string) => {
+    if (processing) return;
+
+    const confirmed = confirm(
+      "Are you sure you want to approve this withdrawal?\n\n" +
+      "⚠️ Make sure you have sent the payment to the user's wallet address before approving!"
+    );
+    
+    if (!confirmed) return;
+
+    setProcessing(id);
+
+    // Optimistic UI update
     setRequests(prev => prev.map(r => r._id === id ? { ...r, status: "approved" } : r));
 
-    await fetch("/api/admin/withdraw/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ withdrawId: id }),
-    });
+    try {
+      const res = await fetch("/api/admin/withdraw/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ withdrawId: id }),
+      });
 
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert("✅ Withdrawal approved successfully!\n\n📧 Email notification sent to user.");
+      } else {
+        alert(`❌ ${data.message || "Failed to approve withdrawal"}`);
+      }
+    } catch (error) {
+      console.error("Approve error:", error);
+      alert("❌ Network error - please try again");
+    }
+
+    setProcessing(null);
     loadData();
   };
 
   const rejectReq = async (id: string) => {
+    if (processing) return;
+
+    // Step 1: Reason prompt with templates
+    const reason = prompt(
+      "Please provide a detailed reason for rejecting this withdrawal:\n\n" +
+      "Common reasons:\n" +
+      "• Invalid wallet address format\n" +
+      "• Wallet address does not match TRC20 standard\n" +
+      "• Insufficient account verification\n" +
+      "• Suspected fraudulent activity\n" +
+      "• Minimum withdrawal amount not met\n\n" +
+      "Enter your reason:"
+    );
+
+    // Step 2: Validation
+    if (!reason || reason.trim().length === 0) {
+      alert("⚠️ Rejection reason is required!");
+      return;
+    }
+
+    if (reason.trim().length < 10) {
+      alert("⚠️ Please provide a more detailed reason (at least 10 characters)");
+      return;
+    }
+
+    // Step 3: Confirmation with preview
+    const confirmed = confirm(
+      `Are you sure you want to reject this withdrawal?\n\n` +
+      `Reason:\n"${reason}"\n\n` +
+      `💰 The withdrawal amount will be REFUNDED to the user's wallet balance.\n` +
+      `📧 The user will receive an email with this reason.`
+    );
+    
+    if (!confirmed) return;
+
+    setProcessing(id);
+
+    // Optimistic UI update
     setRequests(prev => prev.map(r => r._id === id ? { ...r, status: "rejected" } : r));
 
-    await fetch("/api/admin/withdraw/reject", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ withdrawId: id }),
-    });
+    try {
+      const res = await fetch("/api/admin/withdraw/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          withdrawId: id,
+          reason: reason.trim()
+        }),
+      });
 
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert(
+          "✅ Withdrawal rejected successfully!\n\n" +
+          `💰 Amount refunded: $${data.data?.amount || 'N/A'}\n` +
+          `📧 Email notification sent to user with rejection reason.`
+        );
+      } else {
+        alert(`❌ ${data.message || "Failed to reject withdrawal"}`);
+      }
+    } catch (error) {
+      console.error("Reject error:", error);
+      alert("❌ Network error - please try again");
+    }
+
+    setProcessing(null);
     loadData();
   };
 
@@ -115,8 +201,8 @@ export default function AdminWithdrawPage() {
                     </td>
 
                     {/* WALLET */}
-                    <td className="p-4 text-sm text-gray-300">
-                      {r.walletAddress}
+                    <td className="p-4 text-sm text-gray-300 font-mono break-all max-w-xs">
+                      {r.walletAddress || "Not provided"}
                     </td>
 
                     {/* QR IMAGE PREVIEW */}
@@ -152,18 +238,18 @@ export default function AdminWithdrawPage() {
                       <div className="flex gap-2 justify-center">
                         <button
                           onClick={() => approveReq(r._id)}
-                          disabled={r.status !== "pending"}
-                          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg disabled:opacity-40"
+                          disabled={r.status !== "pending" || processing === r._id}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition"
                         >
-                          Approve
+                          {processing === r._id ? "..." : "Approve"}
                         </button>
 
                         <button
                           onClick={() => rejectReq(r._id)}
-                          disabled={r.status !== "pending"}
-                          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-40"
+                          disabled={r.status !== "pending" || processing === r._id}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition"
                         >
-                          Reject
+                          {processing === r._id ? "..." : "Reject"}
                         </button>
                       </div>
                     </td>
@@ -191,7 +277,7 @@ export default function AdminWithdrawPage() {
         >
           <div className="relative bg-white/10 p-4 rounded-xl border border-white/20 shadow-2xl max-w-3xl w-full">
             <button
-              className="absolute top-4 right-4 w-10 h-10 bg-red-600 rounded-full text-white"
+              className="absolute top-4 right-4 w-10 h-10 bg-red-600 rounded-full text-white hover:bg-red-700 transition"
               onClick={() => setSelectedQR(null)}
             >
               ✕

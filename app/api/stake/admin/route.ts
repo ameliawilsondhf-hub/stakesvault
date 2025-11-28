@@ -3,98 +3,159 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
+import Stake from "@/lib/models/stake";
 
-export const dynamic = 'force-dynamic';
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await connectDB();
 
-    // Check admin authentication
+    // Get admin user from JWT token
     const cookieStore = await cookies();
     const token = cookieStore.get("token")?.value;
 
     if (!token) {
       return NextResponse.json(
-        { success: false, msg: "No cookie token" },
+        { success: false, message: "Unauthorized - No token" },
         { status: 401 }
       );
     }
 
-    if (!process.env.JWT_SECRET) {
-      return NextResponse.json(
-        { success: false, msg: "JWT SECRET missing" },
-        { status: 500 }
-      );
-    }
-
-    let decoded: any;
+    let userId;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (e) {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      userId = decoded.userId || decoded.id;
+    } catch (jwtError) {
       return NextResponse.json(
-        { success: false, msg: "Invalid token" },
+        { success: false, message: "Invalid token" },
         { status: 401 }
       );
     }
 
-    // Verify admin
-    const adminUser = await User.findById(decoded.id);
-
-    if (!adminUser || !adminUser.isAdmin) {
+    // Check if user is admin (using both fields for safety)
+    const admin = await User.findById(userId);
+    if (!admin || (!admin.isAdmin && admin.role !== "admin")) {
+      console.log(`❌ Unauthorized access attempt by user: ${userId}`);
       return NextResponse.json(
-        { success: false, msg: "Admin access required" },
+        { success: false, message: "Unauthorized - Admin access required" },
         { status: 403 }
       );
     }
 
-    console.log("✅ Admin verified, fetching all stakes...");
+    console.log(`✅ Admin access granted: ${admin.email}`);
 
-    // Fetch all users with stakes
-    const users = await User.find({ 
-      "stakes.0": { $exists: true } 
-    })
-    .select('name email stakes')
-    .lean();
+    // Get query parameters
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get("status");
+    const userId_filter = searchParams.get("userId");
+    const limit = parseInt(searchParams.get("limit") || "100");
+    const skip = parseInt(searchParams.get("skip") || "0");
 
-    console.log(`📊 Found ${users.length} users with stakes`);
+    // Build query - looking for user.stakes array
+    const users = await User.find({
+      stakes: { $exists: true, $ne: [] }
+    }).select('name email walletBalance stakedBalance stakes');
 
-    // Flatten all stakes with user info
-    const allStakes = users.flatMap((user: any) => 
-      (user.stakes || []).map((stake: any) => ({
-        _id: stake._id?.toString() || Math.random().toString(),
-        amount: stake.amount || 0,
-        stakedAt: stake.stakedAt,
-        unlockDate: stake.unlockDate,
-        lockPeriod: stake.lockPeriod || 0,
-        status: stake.status || 'active',
-        apy: stake.apy || 0,
-        earnedRewards: stake.earnedRewards || 0,
-        userId: {
-          _id: user._id.toString(),
-          name: user.name || 'Unknown',
-          email: user.email || 'N/A',
-        }
-      }))
-    );
+    // Flatten stakes from all users
+    const allStakes: any[] = [];
+    users.forEach(user => {
+      if (user.stakes && user.stakes.length > 0) {
+        user.stakes.forEach((stake: any) => {
+          allStakes.push({
+            _id: stake._id || `${user._id}-${stake.stakedAt}`,
+            userId: {
+              _id: user._id,
+              name: user.name,
+              email: user.email,
+              walletBalance: user.walletBalance,
+              stakedBalance: user.stakedBalance
+            },
+            amount: stake.amount,
+            originalAmount: stake.amount,
+            currentAmount: stake.amount,
+            stakedAt: stake.stakedAt,
+            unlockDate: stake.unlockDate,
+            lockPeriod: stake.lockPeriod,
+            status: stake.status,
+            apy: stake.apy,
+            earnedRewards: stake.earnedRewards || 0,
+            totalProfit: stake.earnedRewards || 0,
+            cycle: 1
+          });
+        });
+      }
+    });
 
-    // Sort by staked date (newest first)
-    allStakes.sort((a: any, b: any) => 
+    // Apply filters
+    let filteredStakes = allStakes;
+    if (status) {
+      filteredStakes = filteredStakes.filter(s => s.status === status);
+    }
+    if (userId_filter) {
+      filteredStakes = filteredStakes.filter(s => s.userId._id.toString() === userId_filter);
+    }
+
+    // Sort by date (newest first)
+    filteredStakes.sort((a, b) => 
       new Date(b.stakedAt).getTime() - new Date(a.stakedAt).getTime()
     );
 
-    console.log(`✅ Returning ${allStakes.length} total stakes`);
+    // Pagination
+    const paginatedStakes = filteredStakes.slice(skip, skip + limit);
+
+    // Calculate statistics
+    const calculateCurrentBalance = (amount: number, startDate: Date) => {
+      const daysPassed = Math.floor(
+        (new Date().getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      return amount * Math.pow(1.01, daysPassed);
+    };
+
+    const activeStakes = allStakes.filter(s => s.status === 'active');
+    const totalValueLocked = activeStakes.reduce((sum, stake) => {
+      return sum + calculateCurrentBalance(stake.amount, new Date(stake.stakedAt));
+    }, 0);
+
+    const totalProfitGenerated = allStakes.reduce((sum, stake) => {
+      const current = calculateCurrentBalance(stake.amount, new Date(stake.stakedAt));
+      return sum + (current - stake.amount);
+    }, 0);
+
+    const platformStats = {
+      totalStakes: allStakes.length,
+      activeStakes: activeStakes.length,
+      unlockedStakes: allStakes.filter(s => s.status !== 'active').length,
+      totalValueLocked: totalValueLocked,
+      totalProfitGenerated: totalProfitGenerated,
+      averageStakeAmount: allStakes.length > 0 
+        ? allStakes.reduce((sum, stake) => sum + stake.amount, 0) / allStakes.length 
+        : 0,
+      totalUsers: users.length
+    };
+
+    console.log(`📊 Admin Stats: ${allStakes.length} total stakes from ${users.length} users`);
 
     return NextResponse.json({
       success: true,
-      stakes: allStakes,
-      total: allStakes.length
+      stakes: paginatedStakes,
+      pagination: {
+        total: filteredStakes.length,
+        limit,
+        skip,
+        hasMore: filteredStakes.length > skip + limit
+      },
+      platformStats
     });
 
-  } catch (err: any) {
-    console.error("❌ Admin Stakes Error:", err);
+  } catch (error: any) {
+    console.error("❌ Admin Stakes Error:", error);
     return NextResponse.json(
-      { success: false, msg: "Server error", error: err.message },
+      {
+        success: false,
+        message: "Server error",
+        error: error.message
+      },
       { status: 500 }
     );
   }

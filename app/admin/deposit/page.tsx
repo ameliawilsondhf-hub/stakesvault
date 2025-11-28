@@ -101,7 +101,35 @@ export default function AdminDepositPage() {
   const rejectDeposit = async (id: string) => {
     if (processing) return;
     
-    const confirmed = confirm("Are you sure you want to reject this deposit?");
+    // Step 1: Ask for rejection reason
+    const reason = prompt(
+      "Please provide a detailed reason for rejecting this deposit:\n\n" +
+      "Common reasons:\n" +
+      "• Screenshot is unclear or blurry\n" +
+      "• Transaction amount does not match\n" +
+      "• Transaction ID is not visible\n" +
+      "• Wrong wallet address shown\n\n" +
+      "Enter your reason:"
+    );
+
+    // Step 2: Validate reason
+    if (!reason || reason.trim().length === 0) {
+      alert("⚠️ Rejection reason is required!");
+      return;
+    }
+
+    if (reason.trim().length < 10) {
+      alert("⚠️ Please provide a more detailed reason (at least 10 characters)");
+      return;
+    }
+
+    // Step 3: Confirm with reason preview
+    const confirmed = confirm(
+      `Are you sure you want to reject this deposit?\n\n` +
+      `Reason:\n"${reason}"\n\n` +
+      `The user will receive an email with this reason.`
+    );
+    
     if (!confirmed) return;
 
     setProcessing(id);
@@ -110,7 +138,10 @@ export default function AdminDepositPage() {
       const res = await fetch("/api/admin/deposit/reject", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId: id }),
+        body: JSON.stringify({ 
+          requestId: id,
+          reason: reason.trim()
+        }),
       });
 
       const data = await res.json();
@@ -120,7 +151,7 @@ export default function AdminDepositPage() {
         setDeposits((prev) =>
           prev.map((d) => (d._id === id ? { ...d, status: "rejected" as const } : d))
         );
-        alert("Deposit rejected successfully!");
+        alert("✅ Deposit rejected successfully!\n\n📧 Email notification sent to user.");
       } else {
         alert(data.message || "Failed to reject deposit");
       }
