@@ -1,58 +1,55 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
 /**
  * ============================================
  * 🔒 ROUTE PROXY & AUTHENTICATION MIDDLEWARE
  * ============================================
- * This proxy middleware handles:
- * - Admin route protection
- * - User authentication checks
- * - Automatic redirects
- * - Security layer for protected routes
+ * Supports:
+ * ✅ Normal JWT login (token cookie)
+ * ✅ Google OAuth via NextAuth
+ * ✅ Vercel compatible
  */
-export function middleware(request: NextRequest) {
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get("token");
+
+  // ✅ Google / NextAuth Token
+  const nextAuthToken = await getToken({ req: request });
+
+  // ✅ Custom JWT Token (your normal login)
+  const customToken = request.cookies.get("token");
+
+  // ✅ Final authentication check
+  const isAuthenticated = nextAuthToken || customToken;
 
   // ============================================
   // 🛡️ ADMIN PROXY LAYER
   // ============================================
   if (pathname.startsWith("/admin")) {
-    
-    // ✅ Allow login page without authentication
+
+    // ✅ Allow admin login page without authentication
     if (pathname === "/admin/login") {
-      // If already logged in, redirect to admin dashboard
-      if (token) {
-        console.log(`🔄 Admin Proxy: Already authenticated, redirecting to dashboard`);
+      if (isAuthenticated) {
         return NextResponse.redirect(new URL("/admin", request.url));
       }
       return NextResponse.next();
     }
 
-    // 🚨 Block all other admin routes without token
-    if (!token) {
-      console.log(`🚨 Admin Proxy: Blocked unauthorized access → ${pathname}`);
+    // 🚨 Block all other admin routes without auth
+    if (!isAuthenticated) {
       return NextResponse.redirect(new URL("/admin/login", request.url));
     }
-
-    // ✅ Token exists - allow access (backend APIs will verify admin role)
-    console.log(`✅ Admin Proxy: Access granted → ${pathname}`);
   }
 
   // ============================================
   // 🛡️ DASHBOARD PROXY LAYER
   // ============================================
   if (pathname.startsWith("/dashboard")) {
-    
-    // 🚨 Block dashboard without authentication
-    if (!token) {
-      console.log(`🚨 Dashboard Proxy: Blocked unauthorized access → ${pathname}`);
+    if (!isAuthenticated) {
       return NextResponse.redirect(new URL("/auth/login", request.url));
     }
-
-    // ✅ Token exists - allow access
-    console.log(`✅ Dashboard Proxy: Access granted → ${pathname}`);
   }
 
   return NextResponse.next();
@@ -62,12 +59,10 @@ export function middleware(request: NextRequest) {
  * ============================================
  * 🎯 MATCHER CONFIGURATION
  * ============================================
- * Defines which routes this middleware should run on
  */
 export const config = {
   matcher: [
-    "/admin/:path*",      // All admin routes
-    "/dashboard/:path*",  // All dashboard routes
+    "/admin/:path*",      
+    "/dashboard/:path*",  
   ],
 };
-

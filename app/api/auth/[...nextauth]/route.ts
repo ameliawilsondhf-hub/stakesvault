@@ -57,7 +57,7 @@ async function trackUserLogin(
       device: device,
       browser: browser,
       os: os,
-      date: new Date(), // ✅ Added for compatibility
+      date: new Date(),
       timestamp: new Date(),
       suspicious: suspiciousCheck.suspicious
     });
@@ -213,7 +213,6 @@ async function trackUserLogin(
     
   } catch (error) {
     console.error("⚠️ Security tracking error (non-blocking):", error);
-    // Don't block login if tracking fails
   }
 }
 
@@ -222,6 +221,13 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code"
+        }
+      }
     }),
     
     FacebookProvider({
@@ -258,7 +264,6 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // 🔥 Track with generic info - will be updated by client-side call
         await trackUserLogin(user, 'credentials');
 
         return {
@@ -279,7 +284,6 @@ export const authOptions: NextAuthOptions = {
         let existingUser = await User.findOne({ email: user.email });
 
         if (!existingUser) {
-          // New OAuth user
           const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
           const currentIP = await getClientIP();
           const currentLocation = await getLocationFromIP(currentIP);
@@ -319,7 +323,6 @@ export const authOptions: NextAuthOptions = {
             throw new Error(`banned::${existingUser.banReason || "Account banned"}`);
           }
 
-          // 🔥 Track with generic info - will be updated by client-side call
           if (account?.provider) {
             await trackUserLogin(existingUser, account.provider);
           }
@@ -343,7 +346,7 @@ export const authOptions: NextAuthOptions = {
       }
     },
 
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         await connectDB();
         const dbUser = await User.findOne({ email: user.email });
@@ -353,6 +356,7 @@ export const authOptions: NextAuthOptions = {
           token.email = dbUser.email;
           token.role = dbUser.isAdmin ? "admin" : "user";
           token.isAdmin = dbUser.isAdmin || false;
+          token.provider = account?.provider || 'credentials';
         }
       }
       return token;
@@ -364,9 +368,38 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).email = token.email as string;
         (session.user as any).role = token.role as string;
         (session.user as any).isAdmin = token.isAdmin as boolean;
+        (session.user as any).provider = token.provider as string;
       }
       return session;
     },
+
+    // 🔥 FIXED REDIRECT CALLBACK
+    async redirect({ url, baseUrl }) {
+      console.log("🔄 Redirect:", { url, baseUrl });
+      
+      // ✅ Handle relative URLs (like "/dashboard")
+      if (url.startsWith("/")) {
+        console.log("✅ Relative URL detected, redirecting to:", `${baseUrl}${url}`);
+        return `${baseUrl}${url}`;
+      }
+      
+      // ✅ Check if URL is from same origin
+      try {
+        const urlObj = new URL(url);
+        const baseUrlObj = new URL(baseUrl);
+        
+        if (urlObj.origin === baseUrlObj.origin) {
+          console.log("✅ Same origin, allowing:", url);
+          return url;
+        }
+      } catch (e) {
+        console.log("⚠️ Invalid URL, using default");
+      }
+      
+      // ✅ Default: redirect to dashboard
+      console.log("✅ Default redirect to dashboard");
+      return `${baseUrl}/dashboard`;
+    }
   },
 
   pages: {
@@ -378,7 +411,10 @@ export const authOptions: NextAuthOptions = {
   
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60,
   },
+
+  debug: process.env.NODE_ENV === "development",
 };
 
 const handler = NextAuth(authOptions);

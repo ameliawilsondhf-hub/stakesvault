@@ -1,183 +1,176 @@
-import { NextResponse } from "next/server";
+import NextAuth, { NextAuthOptions } from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
+import FacebookProvider from "next-auth/providers/facebook";
+import CredentialsProvider from "next-auth/providers/credentials";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
-import { cookies, headers } from "next/headers"; // ✅ Added headers
-import jwt from "jsonwebtoken";
-import { getServerSession } from "next-auth";
+import bcrypt from "bcryptjs";
 import { 
   getClientIP, 
-  getLocationFromIP,
+  getLocationFromIP, 
   generateDeviceFingerprint,
+  isSuspiciousLogin,
   createSecurityAlert
 } from "@/lib/security";
 
-export async function POST(req: Request) {
+// ============================================
+// 🔥 TRACK USER LOGIN WITH DEVICE INFO
+// ============================================
+async function trackUserLogin(
+  user: any, 
+  provider: string = 'credentials',
+  clientDeviceInfo?: { browser?: string; os?: string; device?: string }
+) {
   try {
-    await connectDB();
-
-    // 🔥 FIX: Support both JWT token AND NextAuth session
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
-    
-    let userId: string | null = null;
-
-    // Try JWT token first (for credentials login)
-    if (token) {
-      try {
-        const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
-        userId = decoded.id;
-        console.log("✅ JWT token verified, userId:", userId);
-      } catch (error) {
-        console.log("⚠️ JWT verification failed, trying NextAuth session...");
-      }
-    }
-
-    // 🔥 FIX: If no JWT, try NextAuth session (for OAuth login)
-    if (!userId) {
-      const session = await getServerSession();
-      
-      if (session?.user?.email) {
-        console.log("✅ NextAuth session found:", session.user.email);
-        
-        // Find user by email from OAuth
-        const oauthUser = await User.findOne({ email: session.user.email });
-        if (oauthUser) {
-          userId = oauthUser._id.toString();
-          console.log("✅ OAuth user found, userId:", userId);
-        }
-      } else {
-        console.log("❌ No NextAuth session found");
-      }
-    }
-
-    // If still no user, return unauthorized
-    if (!userId) {
-      console.log("❌ No valid authentication found");
-      return NextResponse.json({ 
-        success: false,
-        message: "Unauthorized - No valid session" 
-      }, { status: 401 });
-    }
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return NextResponse.json({ 
-        success: false,
-        message: "User not found" 
-      }, { status: 404 });
-    }
-
-    // Get device info from request body (sent from client)
-    const body = await req.json();
-    const { userAgent, browser, os, provider } = body;
-
-    console.log("📱 Received device info:", { browser, os, provider, userAgent: userAgent ? "provided" : "missing" });
-
-    // 🔥 FIX: Get User-Agent from headers if not provided in body
-    const headersList = await headers();
-    const serverUserAgent = headersList.get("user-agent") || "";
-    const finalUserAgent = userAgent || serverUserAgent || "Unknown Device";
-
-    console.log("🔍 Final User-Agent:", finalUserAgent.substring(0, 50) + "...");
-
-    // Get IP and location
     const currentIP = await getClientIP();
     const currentLocation = await getLocationFromIP(currentIP);
-    const deviceFingerprint = generateDeviceFingerprint(currentIP, finalUserAgent);
+    
+    const browser = clientDeviceInfo?.browser || `${provider} Browser`;
+    const os = clientDeviceInfo?.os || `${provider} OS`;
+    const device = clientDeviceInfo?.device || `${os} ${browser}`;
+    
+    const userAgent = device;
+    const deviceFingerprint = generateDeviceFingerprint(currentIP, userAgent);
 
-    console.log("🔐 Device fingerprint:", deviceFingerprint);
+    const previousIP = user.ipAddress || "";
+    const previousLocation = user.currentLocation || "";
 
-    // Initialize arrays if they don't exist
+    // Initialize arrays
     user.loginHistory = user.loginHistory || [];
     user.devices = user.devices || [];
     user.loginIPs = user.loginIPs || [];
     user.securityAlerts = user.securityAlerts || [];
 
-    // 🔥 FIX: Use client-provided browser/OS info (more accurate)
-    const deviceName = `${os || 'Unknown OS'} ${browser || 'Unknown Browser'}`;
+    // Check suspicious activity
+    const suspiciousCheck = isSuspiciousLogin({
+      currentIP,
+      previousIP,
+      currentLocation,
+      previousLocation,
+      loginHistory: user.loginHistory,
+      devices: user.devices
+    });
 
-    // Add login history with proper device info
+    // Add login history
     (user.loginHistory as any).push({
       ip: currentIP,
       location: currentLocation,
-      device: deviceName,
-      browser: browser || "Unknown Browser",
-      os: os || "Unknown OS",
+      device: device,
+      browser: browser,
+      os: os,
       date: new Date(),
       timestamp: new Date(),
-      suspicious: false
+      suspicious: suspiciousCheck.suspicious
     });
 
-    // Keep last 50 records
     if (user.loginHistory.length > 50) {
       user.loginHistory = user.loginHistory.slice(-50);
     }
 
-    // Check if device exists
+    // Device tracking
     const existingDevice = user.devices.find(d => d.deviceId === deviceFingerprint);
 
     if (existingDevice) {
-      // Update existing device
       existingDevice.lastUsed = new Date();
       existingDevice.ipAddress = currentIP;
       existingDevice.location = currentLocation;
-      existingDevice.browser = browser || "Unknown Browser";
-      existingDevice.os = os || "Unknown OS";
-      existingDevice.name = deviceName;
-      
-      console.log("✅ Updated existing device:", {
-        fingerprint: deviceFingerprint,
-        name: deviceName
-      });
+      existingDevice.browser = browser;
+      existingDevice.os = os;
+      existingDevice.name = device;
     } else {
-      // New device detected
       (user.devices as any).push({
-        name: deviceName,
+        name: device,
         deviceId: deviceFingerprint,
-        browser: browser || "Unknown Browser",
-        os: os || "Unknown OS",
+        browser: browser,
+        os: os,
         lastUsed: new Date(),
         firstSeen: new Date(),
-        trusted: provider === 'google' || provider === 'facebook', // OAuth = trusted
+        trusted: provider !== 'credentials',
         ipAddress: currentIP,
         location: currentLocation
       });
 
-      // Alert for new device
       const alert = createSecurityAlert({
         type: 'new_device',
         ip: currentIP,
         location: currentLocation,
-        device: deviceName,
-        severity: 'medium'
+        device: device,
+        severity: provider === 'credentials' ? 'medium' : 'low'
       });
       
       (user.securityAlerts as any).push(alert);
-      
-      console.log("✅ Added new device:", {
-        fingerprint: deviceFingerprint,
-        name: deviceName,
-        trusted: provider === 'google' || provider === 'facebook'
-      });
     }
 
-    // Update IP tracking
+    // IP tracking
     const existingIP = user.loginIPs.find(i => i.ip === currentIP);
     if (existingIP) {
       existingIP.count += 1;
       existingIP.lastLogin = new Date();
-      console.log("✅ Updated IP count:", { ip: currentIP, count: existingIP.count });
     } else {
       (user.loginIPs as any).push({
         ip: currentIP,
         lastLogin: new Date(),
         count: 1
       });
-      console.log("✅ Added new IP:", currentIP);
+
+      if (previousIP) {
+        const alert = createSecurityAlert({
+          type: 'ip_change',
+          ip: currentIP,
+          location: currentLocation,
+          device: device,
+          severity: 'low'
+        });
+        (user.securityAlerts as any).push(alert);
+      }
+    }
+
+    // Location change check
+    if (previousLocation && currentLocation !== previousLocation) {
+      const prevCountry = previousLocation.split(',')[1]?.trim();
+      const currCountry = currentLocation.split(',')[1]?.trim();
+      
+      if (prevCountry !== currCountry) {
+        const alert = createSecurityAlert({
+          type: 'new_location',
+          ip: currentIP,
+          location: currentLocation,
+          device: device,
+          severity: 'medium'
+        });
+        (user.securityAlerts as any).push(alert);
+      }
+    }
+
+    // Multiple devices check
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const recentLogins = user.loginHistory.filter(
+      (login: any) => new Date(login.timestamp) > fiveMinutesAgo
+    );
+    
+    if (recentLogins.length > 1) {
+      const uniqueDevices = new Set(recentLogins.map((l: any) => l.device)).size;
+      if (uniqueDevices > 1) {
+        const alert = createSecurityAlert({
+          type: 'multiple_devices',
+          ip: currentIP,
+          location: currentLocation,
+          device: device,
+          severity: 'high'
+        });
+        (user.securityAlerts as any).push(alert);
+      }
+    }
+
+    // Update registration info
+    if (!user.registrationIP) {
+      user.registrationIP = currentIP;
+      user.registrationLocation = currentLocation;
     }
 
     // Update current status
+    user.previousIP = previousIP;
+    user.previousLocation = previousLocation;
     user.ipAddress = currentIP;
     user.currentLocation = currentLocation;
     user.lastLogin = new Date();
@@ -194,38 +187,244 @@ export async function POST(req: Request) {
     user.loginStats.uniqueDevices = user.devices.length;
     user.loginStats.uniqueLocations = new Set(user.loginHistory.map((l: any) => l.location)).size;
 
+    // Security logs
+    if (suspiciousCheck.suspicious) {
+      user.securityLogs = user.securityLogs || [];
+      (user.securityLogs as any).push({
+        type: suspiciousCheck.reasons.join(", "),
+        ip: currentIP,
+        device: device,
+        location: currentLocation,
+        risk: suspiciousCheck.severity === 'high' ? 3 : suspiciousCheck.severity === 'medium' ? 2 : 1,
+        date: new Date()
+      });
+    }
+
+    if (user.securityAlerts.length > 100) {
+      user.securityAlerts = user.securityAlerts.slice(-100);
+    }
+
     await user.save();
-
-    console.log("✅ Device tracking successful:", {
-      userId: user._id,
-      email: user.email,
-      device: deviceName,
-      provider,
-      totalDevices: user.devices.length,
-      totalLogins: user.loginStats.totalLogins
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: "Device tracked successfully",
-      device: deviceName,
-      stats: {
-        totalDevices: user.devices.length,
-        totalLogins: user.loginStats.totalLogins
-      }
-    });
-
-  } catch (error: any) {
-    console.error("❌ Device tracking error:", error);
-    console.error("Error stack:", error.stack);
+    console.log(`✅ Security tracking updated for ${provider} login - Device: ${device}`);
     
-    return NextResponse.json(
-      { 
-        success: false,
-        message: "Error tracking device", 
-        error: error.message 
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("⚠️ Security tracking error (non-blocking):", error);
   }
 }
+
+// ============================================
+// 🔐 NEXTAUTH CONFIGURATION
+// ============================================
+export const authOptions: NextAuthOptions = {
+  providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code"
+        }
+      }
+    }),
+    
+    FacebookProvider({
+      clientId: process.env.FACEBOOK_CLIENT_ID || "",
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
+    }),
+    
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
+
+        await connectDB();
+        
+        const user = await User.findOne({ email: credentials.email }).select("+password");
+        
+        if (!user || !user.password) {
+          return null;
+        }
+
+        if (user.isBanned) {
+          throw new Error(`banned::${user.banReason || "Account banned"}`);
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, user.password);
+        
+        if (!isValid) {
+          return null;
+        }
+
+        await trackUserLogin(user, 'credentials');
+
+        return {
+          id: user._id?.toString() || String(user._id),
+          email: user.email,
+          name: user.name,
+          isAdmin: user.isAdmin || false,
+        };
+      }
+    })
+  ],
+  
+  callbacks: {
+    // ============================================
+    // 🔥 SIGN IN CALLBACK
+    // ============================================
+    async signIn({ user, account }) {
+      await connectDB();
+
+      try {
+        let existingUser = await User.findOne({ email: user.email });
+
+        if (!existingUser) {
+          const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+          const currentIP = await getClientIP();
+          const currentLocation = await getLocationFromIP(currentIP);
+          
+          existingUser = await User.create({
+            name: user.name,
+            email: user.email,
+            emailVerified: true,
+            referralCode,
+            walletBalance: 0,
+            totalDeposits: 0,
+            levelIncome: 0,
+            referralEarnings: 0,
+            referralCount: 0,
+            level1: [],
+            level2: [],
+            level3: [],
+            registrationIP: currentIP,
+            registrationLocation: currentLocation,
+            ipAddress: currentIP,
+            currentLocation: currentLocation,
+            loginHistory: [],
+            devices: [],
+            securityAlerts: [],
+            loginStats: {
+              totalLogins: 1,
+              failedAttempts: 0,
+              uniqueDevices: 1,
+              uniqueLocations: 1
+            }
+          });
+
+          console.log(`✅ New OAuth user created (${account?.provider}):`, user.email);
+        } else {
+          if (existingUser.isBanned) {
+            console.log(`🚫 Banned user OAuth login attempt: ${user.email}`);
+            throw new Error(`banned::${existingUser.banReason || "Account banned"}`);
+          }
+
+          if (account?.provider) {
+            await trackUserLogin(existingUser, account.provider);
+          }
+
+          if (!existingUser.emailVerified) {
+            existingUser.emailVerified = true;
+            await existingUser.save();
+            console.log("✅ Email auto-verified for OAuth user");
+          }
+        }
+
+        return true;
+      } catch (error: any) {
+        console.error("❌ Sign in error:", error);
+        
+        if (error.message?.includes("banned::")) {
+          throw error;
+        }
+        
+        return false;
+      }
+    },
+
+    // ============================================
+    // 🎫 JWT CALLBACK
+    // ============================================
+    async jwt({ token, user, account }) {
+      if (user) {
+        await connectDB();
+        const dbUser = await User.findOne({ email: user.email });
+        if (dbUser) {
+          token.id = dbUser._id?.toString() || String(dbUser._id);
+          token.sub = dbUser._id?.toString() || String(dbUser._id);
+          token.email = dbUser.email;
+          token.role = dbUser.isAdmin ? "admin" : "user";
+          token.isAdmin = dbUser.isAdmin || false;
+          token.provider = account?.provider || 'credentials';
+        }
+      }
+      return token;
+    },
+
+    // ============================================
+    // 👤 SESSION CALLBACK
+    // ============================================
+    async session({ session, token }) {
+      if (token && session.user) {
+        (session.user as any).id = token.id as string;
+        (session.user as any).email = token.email as string;
+        (session.user as any).role = token.role as string;
+        (session.user as any).isAdmin = token.isAdmin as boolean;
+        (session.user as any).provider = token.provider as string;
+      }
+      return session;
+    },
+
+    // ============================================
+    // 🔄 REDIRECT CALLBACK (CRITICAL FOR BOTH LOCALHOST & DOMAIN)
+    // ============================================
+    async redirect({ url, baseUrl }) {
+      console.log("🔄 Redirect:", { url, baseUrl });
+      
+      // If URL is relative, prepend baseUrl
+      if (url.startsWith("/")) {
+        return `${baseUrl}${url}`;
+      }
+      
+      // If URL is from same origin, allow it
+      try {
+        const urlObj = new URL(url);
+        const baseUrlObj = new URL(baseUrl);
+        
+        if (urlObj.origin === baseUrlObj.origin) {
+          return url;
+        }
+      } catch (e) {
+        // Invalid URL, use default
+      }
+      
+      // Default: redirect to dashboard
+      return `${baseUrl}/dashboard`;
+    }
+  },
+
+  pages: {
+    signIn: "/auth/login",
+    error: "/auth/login",
+  },
+
+  secret: process.env.NEXTAUTH_SECRET,
+  
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+
+  // Enable debug only in development
+  debug: process.env.NODE_ENV === "development",
+};
+
+const handler = NextAuth(authOptions);
+
+export { handler as GET, handler as POST };
