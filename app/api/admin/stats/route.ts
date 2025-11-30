@@ -12,7 +12,7 @@ export const revalidate = 0;
 export async function GET() {
   try {
     await connectDB();
-
+    
     // Authentication Check
     const cookieStore = await cookies();
     const token = cookieStore.get("token")?.value;
@@ -24,7 +24,7 @@ export async function GET() {
       );
     }
 
-    if (!process.env.JWT_SECRET) {
+    if (!process.env.JWT_SECRET) { 
       console.error("JWT_SECRET missing in environment");
       return NextResponse.json(
         { success: false, message: "Server configuration error" },
@@ -44,7 +44,7 @@ export async function GET() {
     }
 
     // Check Admin Status
-    const admin = await User.findById(decoded.id).lean();
+    const admin = await User.findById(decoded.id).select('isAdmin').lean();
 
     if (!admin || admin.isAdmin !== true) {
       return NextResponse.json(
@@ -53,79 +53,172 @@ export async function GET() {
       );
     }
 
-    // Fetch Stats
-    const [users, deposits, withdrawals] = await Promise.all([
-      User.find({}).select('walletBalance stakedBalance referralEarnings levelIncome').lean(),
-      Deposit.find({}).select('amount status createdAt').lean(),
-      Withdraw.find({}).select('amount status createdAt').lean(),
-    ]);
-
-    const totalUsers = users.length;
-
-    // Approved Totals
-    const approvedDeposits = deposits.filter((d) => d.status === "approved");
-    const totalDeposits = approvedDeposits.reduce((sum, d) => sum + (d.amount || 0), 0);
-
-    const approvedWithdrawals = withdrawals.filter((w) => w.status === "approved");
-    const totalWithdrawals = approvedWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0);
-
-    const totalReferral = users.reduce((sum, u) => sum + (u.referralEarnings || 0), 0);
-    const totalLevel = users.reduce((sum, u) => sum + (u.levelIncome || 0), 0);
-    const totalStaked = users.reduce((sum, u) => sum + (u.stakedBalance || 0), 0);
-    const totalWalletBalance = users.reduce((sum, u) => sum + (u.walletBalance || 0), 0);
-
-    // Pending Counts
-    const pendingDeposits = deposits.filter((d) => d.status === "pending").length;
-    const approvedDepositsCount = approvedDeposits.length;
-    const pendingWithdrawals = withdrawals.filter((w) => w.status === "pending").length;
-    const approvedWithdrawalsCount = approvedWithdrawals.length;
-
-    // Today's Activity (Approved Only)
+    // OPTIMIZATION 1: Use MongoDB Aggregation instead of loading all data
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayDeposits = approvedDeposits
-      .filter((d) => d.createdAt && new Date(d.createdAt) >= today)
-      .reduce((sum, d) => sum + (d.amount || 0), 0);
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    const todayWithdrawals = approvedWithdrawals
-      .filter((w) => w.createdAt && new Date(w.createdAt) >= today)
-      .reduce((sum, w) => sum + (w.amount || 0), 0);
+    const [userStats, depositStats, withdrawalStats, dailyStats] = await Promise.all([
+      // User aggregation
+      User.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalUsers: { $sum: 1 },
+            totalWalletBalance: { $sum: '$walletBalance' },
+            totalStaked: { $sum: '$stakedBalance' },
+            totalReferral: { $sum: '$referralEarnings' },
+            totalLevel: { $sum: '$levelIncome' }
+          }
+        }
+      ]),
 
-    // Last 7 Days History (Approved Only)
+      // Deposit aggregation
+      Deposit.aggregate([
+        {
+          $facet: {
+            approved: [
+              { $match: { status: 'approved' } },
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: '$amount' },
+                  count: { $sum: 1 },
+                  todayTotal: {
+                    $sum: {
+                      $cond: [
+                        { $gte: ['$createdAt', today] },
+                        '$amount',
+                        0
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            pending: [
+              { $match: { status: 'pending' } },
+              { $count: 'count' }
+            ]
+          }
+        }
+      ]),
+
+      // Withdrawal aggregation
+      Withdraw.aggregate([
+        {
+          $facet: {
+            approved: [
+              { $match: { status: 'approved' } },
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: '$amount' },
+                  count: { $sum: 1 },
+                  todayTotal: {
+                    $sum: {
+                      $cond: [
+                        { $gte: ['$createdAt', today] },
+                        '$amount',
+                        0
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            pending: [
+              { $match: { status: 'pending' } },
+              { $count: 'count' }
+            ]
+          }
+        }
+      ]),
+
+      // Daily history for last 7 days (deposits and withdrawals combined)
+      Promise.all([
+        Deposit.aggregate([
+          {
+            $match: {
+              status: 'approved',
+              createdAt: { $gte: sevenDaysAgo }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+              },
+              total: { $sum: '$amount' }
+            }
+          }
+        ]),
+        Withdraw.aggregate([
+          {
+            $match: {
+              status: 'approved',
+              createdAt: { $gte: sevenDaysAgo }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+              },
+              total: { $sum: '$amount' }
+            }
+          }
+        ])
+      ])
+    ]);
+
+    // Extract aggregation results with safe defaults
+    const users = userStats[0] || {
+      totalUsers: 0,
+      totalWalletBalance: 0,
+      totalStaked: 0,
+      totalReferral: 0,
+      totalLevel: 0
+    };
+
+    const deposits = {
+      approved: depositStats[0].approved[0] || { total: 0, count: 0, todayTotal: 0 },
+      pending: depositStats[0].pending[0]?.count || 0
+    };
+
+    const withdrawals = {
+      approved: withdrawalStats[0].approved[0] || { total: 0, count: 0, todayTotal: 0 },
+      pending: withdrawalStats[0].pending[0]?.count || 0
+    };
+
+    // Build daily history
+    const [depositsByDay, withdrawalsByDay] = dailyStats;
+    
+    const depositMap = new Map(
+      depositsByDay.map(d => [d._id, d.total])
+    );
+    const withdrawalMap = new Map(
+      withdrawalsByDay.map(w => [w._id, w.total])
+    );
+
     const dailyHistory = [];
-
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       date.setHours(0, 0, 0, 0);
-
-      const nextDay = new Date(date);
-      nextDay.setDate(nextDay.getDate() + 1);
-
-      const dayDeposits = approvedDeposits
-        .filter((d) => {
-          if (!d.createdAt) return false;
-          const createdDate = new Date(d.createdAt);
-          return createdDate >= date && createdDate < nextDay;
-        })
-        .reduce((sum, d) => sum + (d.amount || 0), 0);
-
-      const dayWithdrawals = approvedWithdrawals
-        .filter((w) => {
-          if (!w.createdAt) return false;
-          const createdDate = new Date(w.createdAt);
-          return createdDate >= date && createdDate < nextDay;
-        })
-        .reduce((sum, w) => sum + (w.amount || 0), 0);
-
+      
+      const dateKey = date.toISOString().split('T')[0];
+      
       dailyHistory.push({
         date: date.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
         }),
-        deposits: dayDeposits,
-        withdrawals: dayWithdrawals,
+        deposits: depositMap.get(dateKey) || 0,
+        withdrawals: withdrawalMap.get(dateKey) || 0,
       });
     }
 
@@ -134,25 +227,27 @@ export async function GET() {
       {
         success: true,
         stats: {
-          totalUsers,
-          totalDeposits,
-          pendingDeposits,
-          approvedDeposits: approvedDepositsCount,
-          totalWithdrawals,
-          pendingWithdrawals,
-          approvedWithdrawals: approvedWithdrawalsCount,
-          totalReferral,
-          totalLevel,
-          totalStaked,
-          totalWalletBalance,
-          todayDeposits,
-          todayWithdrawals,
+          totalUsers: users.totalUsers,
+          totalDeposits: deposits.approved.total,
+          pendingDeposits: deposits.pending,
+          approvedDeposits: deposits.approved.count,
+          totalWithdrawals: withdrawals.approved.total,
+          pendingWithdrawals: withdrawals.pending,
+          approvedWithdrawals: withdrawals.approved.count,
+          totalReferral: users.totalReferral,
+          totalLevel: users.totalLevel,
+          totalStaked: users.totalStaked,
+          totalWalletBalance: users.totalWalletBalance,
+          todayDeposits: deposits.approved.todayTotal,
+          todayWithdrawals: withdrawals.approved.todayTotal,
           dailyHistory,
         },
       },
       {
         headers: {
-          'Cache-Control': 'no-store, max-age=0',
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
         },
       }
     );

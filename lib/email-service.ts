@@ -16,7 +16,10 @@ export type EmailType =
   | 'stake_started'
   | 'stake_unlocked'
   | 'stake_withdrawal_completed'
-  | 'stake_relocked';
+  | 'stake_relocked'
+  | 'referral_joined'      // ⭐ NEW
+  | 'commission_earned'    // ⭐ NEW
+  | 'level_income';        // ⭐ NEW
 
 interface EmailData {
   to: string;
@@ -24,7 +27,7 @@ interface EmailData {
   data: Record<string, any>;
 }
 
-// Base email template wrapper (Ultra-Professional - NO LOGO)
+// Base email template wrapper (Ultra-Professional - Mobile Optimized)
 const getEmailTemplate = (content: string, title: string) => `
 <!DOCTYPE html>
 <html>
@@ -34,69 +37,70 @@ const getEmailTemplate = (content: string, title: string) => `
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background-color: #f8fafc;
+      background-color: #f5f5f5;
       margin: 0;
       padding: 0;
       -webkit-font-smoothing: antialiased;
+      -webkit-text-size-adjust: 100%;
     }
     .email-wrapper {
-      background-color: #f8fafc;
-      padding: 40px 20px;
+      background-color: #f5f5f5;
+      padding: 20px 10px;
     }
     .container {
-      max-width: 600px;
+      max-width: 500px;
       margin: 0 auto;
       background: #ffffff;
-      border-radius: 16px;
+      border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
     .header {
       background: linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%);
-      padding: 60px 30px;
+      padding: 32px 20px;
       text-align: center;
     }
     .header h1 {
       color: white;
       margin: 0;
-      font-size: 42px;
-      font-weight: 900;
-      letter-spacing: 4px;
-      text-transform: uppercase;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 2px;
     }
     .header .subtitle {
       color: #93c5fd;
-      font-size: 16px;
-      font-weight: 400;
-      margin-top: 12px;
-      letter-spacing: 1px;
+      font-size: 13px;
+      margin-top: 8px;
+      letter-spacing: 0.5px;
     }
     .content {
-      padding: 40px 30px;
+      padding: 24px 20px;
       color: #334155;
+      font-size: 14px;
+      line-height: 1.6;
     }
     .button {
       display: inline-block;
-      padding: 14px 32px;
+      padding: 12px 24px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white !important;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 6px;
       font-weight: 600;
-      font-size: 15px;
-      margin: 20px 0;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      font-size: 14px;
+      margin: 16px 0;
     }
     .info-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 24px 0;
+      margin: 16px 0;
       background: #f8fafc;
-      border-radius: 12px;
+      border-radius: 8px;
       overflow: hidden;
+      font-size: 13px;
     }
     .info-table td {
-      padding: 14px 20px;
+      padding: 10px 12px;
       border-bottom: 1px solid #e2e8f0;
     }
     .info-table tr:last-child td {
@@ -104,47 +108,48 @@ const getEmailTemplate = (content: string, title: string) => `
     }
     .info-label {
       color: #64748b;
-      font-size: 14px;
       font-weight: 500;
     }
     .info-value {
       color: #0f172a;
       font-weight: 600;
       text-align: right;
-      font-size: 14px;
     }
     .alert-box {
       background: #fef3c7;
-      border-left: 4px solid #f59e0b;
-      padding: 16px 20px;
-      margin: 24px 0;
-      border-radius: 8px;
+      border-left: 3px solid #f59e0b;
+      padding: 12px 14px;
+      margin: 16px 0;
+      border-radius: 6px;
+      font-size: 13px;
     }
     .success-box {
       background: #d1fae5;
-      border-left: 4px solid #10b981;
-      padding: 16px 20px;
-      margin: 24px 0;
-      border-radius: 8px;
+      border-left: 3px solid #10b981;
+      padding: 12px 14px;
+      margin: 16px 0;
+      border-radius: 6px;
+      font-size: 13px;
     }
     .danger-box {
       background: #fee2e2;
-      border-left: 4px solid #ef4444;
-      padding: 16px 20px;
-      margin: 24px 0;
-      border-radius: 8px;
+      border-left: 3px solid #ef4444;
+      padding: 12px 14px;
+      margin: 16px 0;
+      border-radius: 6px;
+      font-size: 13px;
     }
     .footer {
       background: #f8fafc;
-      padding: 30px;
+      padding: 20px;
       text-align: center;
       border-top: 1px solid #e2e8f0;
+      font-size: 11px;
     }
     .footer-text {
       color: #64748b;
-      font-size: 13px;
-      margin: 8px 0;
-      line-height: 1.6;
+      margin: 6px 0;
+      line-height: 1.5;
     }
     .footer-link {
       color: #667eea;
@@ -154,15 +159,32 @@ const getEmailTemplate = (content: string, title: string) => `
     .divider {
       height: 1px;
       background: #e2e8f0;
-      margin: 32px 0;
+      margin: 20px 0;
     }
     .amount-highlight {
-      font-size: 32px;
+      font-size: 28px;
       font-weight: 700;
       color: #10b981;
       text-align: center;
-      margin: 24px 0;
-      letter-spacing: -1px;
+      margin: 20px 0;
+      letter-spacing: -0.5px;
+    }
+    p {
+      margin: 0 0 12px 0;
+    }
+    strong {
+      color: #0f172a;
+    }
+    @media only screen and (max-width: 600px) {
+      .container {
+        border-radius: 0;
+      }
+      .header h1 {
+        font-size: 20px;
+      }
+      .amount-highlight {
+        font-size: 24px;
+      }
     }
   </style>
 </head>
@@ -177,19 +199,14 @@ const getEmailTemplate = (content: string, title: string) => `
         ${content}
       </div>
       <div class="footer">
-        <p class="footer-text" style="font-weight: 600; color: #334155; margin-bottom: 12px;">
-          © ${new Date().getFullYear()} STAKES VAULT. All rights reserved.
+        <p class="footer-text" style="font-weight: 600; color: #334155;">
+          © ${new Date().getFullYear()} STAKES VAULT
         </p>
         <p class="footer-text">
-          Questions? Contact us at 
           <a href="mailto:support@stakesvault.com" class="footer-link">support@stakesvault.com</a>
         </p>
-        <div class="divider" style="margin: 20px auto; max-width: 200px;"></div>
-        <p class="footer-text" style="font-size: 12px;">
-          This is an automated notification. Please do not reply to this email.
-        </p>
-        <p class="footer-text" style="font-size: 12px; margin-top: 8px;">
-          STAKES VAULT - Smart Investment & Automated Staking Platform
+        <p class="footer-text" style="margin-top: 12px;">
+          Smart Investment & Automated Staking Platform
         </p>
       </div>
     </div>
@@ -198,900 +215,592 @@ const getEmailTemplate = (content: string, title: string) => `
 </html>
 `;
 
-// Email content generators (ULTRA-PROFESSIONAL)
+// Email content generators (ULTRA-PROFESSIONAL - MOBILE OPTIMIZED)
 const emailContents = {
   welcome: (data: any) => ({
-    subject: "Welcome to STAKES VAULT - Account Successfully Created",
-    title: "Welcome to STAKES VAULT",
+    subject: "Welcome to STAKES VAULT",
+    title: "Welcome Aboard",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        Thank you for creating an account with <strong>STAKES VAULT</strong>. We're excited to have you join our platform 
-        for smart investing and automated staking solutions.
-      </p>
+      <p>Welcome to <strong>STAKES VAULT</strong>! We're excited to have you join our smart investment platform.</p>
 
       ${data.referralCode ? `
-      <div style="background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border-radius: 12px; padding: 24px; margin: 24px 0; border: 2px solid #c4b5fd;">
-        <p style="margin: 0 0 12px 0; color: #5b21b6; font-size: 14px; font-weight: 600;">
-          YOUR REFERRAL CODE
-        </p>
-        <p style="font-size: 28px; font-weight: 700; color: #6d28d9; letter-spacing: 3px; margin: 0; font-family: monospace;">
-          ${data.referralCode}
-        </p>
-        <p style="margin: 16px 0 0 0; color: #7c3aed; font-size: 13px;">
-          Share this code with friends to earn rewards on their deposits!
-        </p>
+      <div style="background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border-radius: 8px; padding: 16px; margin: 16px 0; border: 2px solid #c4b5fd; text-align: center;">
+        <p style="margin: 0 0 8px 0; color: #5b21b6; font-size: 12px; font-weight: 600;">YOUR REFERRAL CODE</p>
+        <p style="font-size: 22px; font-weight: 700; color: #6d28d9; letter-spacing: 2px; margin: 0; font-family: monospace;">${data.referralCode}</p>
+        <p style="margin: 12px 0 0 0; color: #7c3aed; font-size: 11px;">Share to earn rewards!</p>
       </div>
       ` : ''}
 
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/auth/login" class="button">
-          Access Your Account
-        </a>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/auth/login" class="button">Access Account</a>
       </div>
 
-      <div style="background: #f8fafc; border-radius: 12px; padding: 24px; margin: 32px 0; border: 1px solid #e2e8f0;">
-        <h3 style="color: #0f172a; margin: 0 0 20px 0; font-size: 17px; font-weight: 600;">Getting Started</h3>
-        
-        <div style="margin-bottom: 16px;">
-          <strong style="color: #334155; font-size: 15px;">1. Complete Your Profile</strong>
-          <p style="color: #64748b; font-size: 14px; margin: 4px 0 0 0; line-height: 1.6;">
-            Add your information and enable two-factor authentication for enhanced security.
-          </p>
-        </div>
-        
-        <div style="margin-bottom: 16px;">
-          <strong style="color: #334155; font-size: 15px;">2. Make Your First Deposit</strong>
-          <p style="color: #64748b; font-size: 14px; margin: 4px 0 0 0; line-height: 1.6;">
-            Fund your account securely using USDT (TRC20). Minimum deposit: $20.
-          </p>
-        </div>
-        
-        <div style="margin-bottom: 16px;">
-          <strong style="color: #334155; font-size: 15px;">3. Start Earning</strong>
-          <p style="color: #64748b; font-size: 14px; margin: 4px 0 0 0; line-height: 1.6;">
-            Choose from our staking plans and start earning competitive returns.
-          </p>
-        </div>
-        
-        <div>
-          <strong style="color: #334155; font-size: 15px;">4. Refer & Earn More</strong>
-          <p style="color: #64748b; font-size: 14px; margin: 4px 0 0 0; line-height: 1.6;">
-            Use your referral code to earn commissions on up to 3 levels.
-          </p>
-        </div>
+      <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin: 20px 0; border: 1px solid #e2e8f0;">
+        <p style="color: #0f172a; margin: 0 0 12px 0; font-size: 14px; font-weight: 600;">Quick Start</p>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 8px;"><strong>1.</strong> Complete your profile</p>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 8px;"><strong>2.</strong> Make your first deposit ($20 min)</p>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 8px;"><strong>3.</strong> Start earning with staking</p>
+        <p style="font-size: 13px; color: #64748b; margin: 0;"><strong>4.</strong> Refer friends to earn more</p>
       </div>
 
-      <div class="alert-box" style="background: #dbeafe; border-left-color: #3b82f6;">
-        <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6;">
-          <strong>New User Bonus:</strong> Make your first deposit within 7 days to qualify for a special welcome bonus!
-        </p>
-      </div>
-
-      <p style="color: #64748b; font-size: 14px; line-height: 1.7; margin-top: 32px;">
-        Best regards,<br>
-        <strong style="color: #334155;">The STAKES VAULT Team</strong>
+      <p style="color: #64748b; font-size: 13px; margin-top: 20px;">
+        Best regards,<br><strong>STAKES VAULT Team</strong>
       </p>
     `
   }),
 
   otp: (data: any) => ({
-    subject: "Email Verification Code - STAKES VAULT",
+    subject: "Verification Code - STAKES VAULT",
     title: "Email Verification",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        To complete your email verification, please use the following one-time password (OTP):
-      </p>
+      <p>Use this code to verify your email:</p>
       
-      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 36px; font-weight: 700; padding: 28px; border-radius: 12px; letter-spacing: 8px; text-align: center; margin: 28px 0; font-family: monospace; box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 32px; font-weight: 700; padding: 20px; border-radius: 8px; letter-spacing: 6px; text-align: center; margin: 20px 0; font-family: monospace;">
         ${data.otp}
       </div>
       
       <div class="alert-box">
-        <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-          <strong>⏰ Time Sensitive:</strong> This code will expire in <strong>10 minutes</strong>. 
-          If you didn't request this verification, please disregard this email.
-        </p>
-      </div>
-
-      <div style="background: #f8fafc; border-radius: 10px; padding: 16px; margin: 24px 0; border: 1px solid #e2e8f0;">
-        <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
-          <strong style="color: #334155;">Security Tip:</strong> Never share this code with anyone. STAKES VAULT staff will never ask for your OTP.
+        <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+          <strong>⏰ Expires in 10 minutes.</strong> Never share this code with anyone.
         </p>
       </div>
     `
   }),
 
   password_reset: (data: any) => ({
-    subject: "Password Reset Request - STAKES VAULT",
-    title: "Reset Your Password",
+    subject: "Password Reset - STAKES VAULT",
+    title: "Reset Password",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        We received a request to reset the password for your STAKES VAULT account. Click the button below to create a new password.
-      </p>
+      <p>Click the button below to reset your password:</p>
       
-      <div style="text-align: center; margin: 32px 0;">
+      <div style="text-align: center; margin: 24px 0;">
         <a href="${data.resetUrl}" class="button">Reset Password</a>
       </div>
       
-      <div class="danger-box">
-        <p style="margin: 0 0 12px 0; color: #991b1b; font-weight: 600; font-size: 15px;">🔒 Security Information</p>
-        <ul style="margin: 0; padding-left: 20px; color: #b91c1c; line-height: 1.8; font-size: 14px;">
-          <li>This link expires in <strong>1 hour</strong></li>
-          <li>If you didn't request this, please ignore this email</li>
-          <li>Your password remains unchanged until you set a new one</li>
-          <li>Never share this link with anyone</li>
-        </ul>
+      <div class="alert-box">
+        <p style="margin: 0; color: #92400e; font-size: 13px;">
+          <strong>⏰ Link expires in 1 hour.</strong> If you didn't request this, ignore this email.
+        </p>
       </div>
-      
-      <div class="divider"></div>
-      
-      <p style="color: #64748b; font-size: 13px; margin-bottom: 8px;">
-        <strong>Having trouble with the button?</strong> Copy and paste this URL:
-      </p>
-      <p style="font-size: 12px; word-break: break-all; background: #f8fafc; padding: 12px; border-radius: 8px; color: #667eea; font-family: monospace; border: 1px solid #e2e8f0;">
-        ${data.resetUrl}
-      </p>
     `
   }),
 
   deposit_received: (data: any) => ({
-    subject: "Deposit Request Received - Under Review",
+    subject: "Deposit Received - Under Review",
     title: "Deposit Processing",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        We have successfully received your deposit request and it is currently under review by our team.
-      </p>
+      <p>Your deposit request is being reviewed.</p>
       
-      <div class="amount-highlight">$${data.amount} USDT</div>
+      <div class="amount-highlight">$${data.amount}</div>
       
       <table class="info-table">
         <tr>
-          <td class="info-label">Reference ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.transactionId}</td>
+          <td class="info-label">Reference</td>
+          <td class="info-value" style="font-family: monospace; font-size: 11px;">#${data.transactionId.substring(0, 12)}...</td>
         </tr>
         <tr>
           <td class="info-label">Amount</td>
-          <td class="info-value">$${data.amount} USDT</td>
+          <td class="info-value">$${data.amount}</td>
         </tr>
         <tr>
           <td class="info-label">Status</td>
-          <td class="info-value">
-            <span style="background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">PENDING REVIEW</span>
-          </td>
-        </tr>
-        <tr>
-          <td class="info-label">Submitted On</td>
-          <td class="info-value">${new Date(data.date).toLocaleString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</td>
+          <td class="info-value"><span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">PENDING</span></td>
         </tr>
       </table>
       
       <div class="alert-box">
-        <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-          <strong>⏰ Processing Time:</strong> Your deposit will be reviewed within <strong>24 hours</strong>. 
-          You'll receive another notification once it's processed.
+        <p style="margin: 0; color: #92400e; font-size: 13px;">
+          <strong>⏰ Processing within 24 hours.</strong> You'll be notified once approved.
         </p>
       </div>
-
-      <p style="color: #64748b; font-size: 14px; line-height: 1.7; margin-top: 32px;">
-        Thank you for choosing STAKES VAULT.
-      </p>
     `
   }),
 
   deposit_approved: (data: any) => ({
-    subject: "Deposit Approved - Funds Added Successfully",
+    subject: "Deposit Approved - Funds Added",
     title: "Deposit Confirmed",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        Excellent news! Your deposit has been approved and the funds have been successfully credited to your account.
-      </p>
+      <p>Your deposit has been approved!</p>
       
-      <div class="amount-highlight">$${data.amount} USDT</div>
+      <div class="amount-highlight">$${data.amount}</div>
       
       <div class="success-box">
-        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 15px;">✓ Funds Successfully Added</p>
-        <p style="margin: 8px 0 0 0; color: #047857; font-size: 14px;">
-          Your new wallet balance: <strong>$${data.newBalance} USDT</strong>
-        </p>
+        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 13px;">✓ Funds Successfully Added</p>
+        <p style="margin: 6px 0 0 0; color: #047857; font-size: 12px;">New balance: <strong>$${data.newBalance}</strong></p>
       </div>
       
       <table class="info-table">
         <tr>
-          <td class="info-label">Reference ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.transactionId}</td>
+          <td class="info-label">Reference</td>
+          <td class="info-value" style="font-family: monospace; font-size: 11px;">#${data.transactionId.substring(0, 12)}...</td>
         </tr>
         <tr>
-          <td class="info-label">Amount Deposited</td>
-          <td class="info-value" style="color: #10b981;">$${data.amount} USDT</td>
+          <td class="info-label">Deposited</td>
+          <td class="info-value" style="color: #10b981;">$${data.amount}</td>
         </tr>
         <tr>
           <td class="info-label">New Balance</td>
-          <td class="info-value" style="color: #10b981; font-size: 16px;">$${data.newBalance} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Approved On</td>
-          <td class="info-value">${new Date(data.date).toLocaleString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</td>
+          <td class="info-value" style="color: #10b981; font-size: 15px;">$${data.newBalance}</td>
         </tr>
       </table>
       
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/dashboard" class="button">
-          View Dashboard
-        </a>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard" class="button">View Dashboard</a>
       </div>
-      
-      <div class="alert-box" style="background: #dbeafe; border-left-color: #3b82f6;">
-        <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6;">
-          <strong>💡 Ready to Invest?</strong> Your funds are now available. 
-          Explore our staking plans to start earning competitive returns!
-        </p>
-      </div>
-
-      <p style="color: #64748b; font-size: 14px; line-height: 1.7; margin-top: 32px;">
-        Thank you for your trust in STAKES VAULT.
-      </p>
     `
   }),
 
   deposit_rejected: (data: any) => ({
-    subject: "Important: Action Required - Your STAKES VAULT Deposit Request Has Been Declined",
-    title: "Deposit Review Update",
+    subject: "Deposit Declined - Action Required",
+    title: "Deposit Update",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        Thank you for your recent deposit request with STAKES VAULT. We have reviewed your transaction details and, 
-        regrettably, we are unable to process it at this time due to the issue outlined below.
-      </p>
+      <p>We were unable to process your deposit request.</p>
       
       <table class="info-table">
         <tr>
-          <td class="info-label">Reference ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.transactionId}</td>
+          <td class="info-label">Reference</td>
+          <td class="info-value" style="font-family: monospace; font-size: 11px;">#${data.transactionId.substring(0, 12)}...</td>
         </tr>
         <tr>
           <td class="info-label">Amount</td>
-          <td class="info-value">$${data.amount} USDT</td>
+          <td class="info-value">$${data.amount}</td>
         </tr>
         <tr>
           <td class="info-label">Status</td>
-          <td class="info-value">
-            <span style="background: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">DECLINED</span>
-          </td>
-        </tr>
-        <tr>
-          <td class="info-label">Reviewed On</td>
-          <td class="info-value">${new Date(data.date).toLocaleString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</td>
+          <td class="info-value"><span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">DECLINED</span></td>
         </tr>
       </table>
       
       <div class="danger-box">
-        <div style="display: flex; align-items: start; gap: 16px;">
-          <div style="width: 48px; height: 48px; background: #fee2e2; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-            <span style="font-size: 28px;">⚠️</span>
-          </div>
-          <div style="flex: 1;">
-            <p style="color: #991b1b; margin: 0 0 12px 0; font-weight: 600; font-size: 15px;">Reason for Declining</p>
-            <p style="color: #b91c1c; margin: 0; font-size: 14px; line-height: 1.7;">
-              ${data.reason}
-            </p>
-          </div>
-        </div>
+        <p style="margin: 0 0 8px 0; color: #991b1b; font-weight: 600; font-size: 13px;">Reason</p>
+        <p style="color: #b91c1c; margin: 0; font-size: 12px; line-height: 1.5;">${data.reason}</p>
       </div>
       
-      <div style="background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 12px; padding: 24px; margin: 32px 0;">
-        <h3 style="color: #1e40af; margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">📋 How to Resolve This</h3>
-        <ol style="margin: 0; padding-left: 20px; color: #1e40af; line-height: 2; font-size: 14px;">
-          <li><strong>Review</strong> the decline reason carefully above</li>
-          <li><strong>Capture</strong> a clear, high-resolution screenshot showing:
-            <ul style="margin-top: 8px; padding-left: 20px; list-style-type: circle;">
-              <li>Complete transaction amount</li>
-              <li>Full transaction ID/hash</li>
-              <li>Transaction date and time</li>
-              <li>Wallet addresses (sender & recipient)</li>
-            </ul>
-          </li>
-          <li><strong>Resubmit:</strong> Initiate a new deposit request using the correct wallet address as provided on the STAKES VAULT platform.</li>
-          <li><strong>Verify</strong> all details match your actual transaction</li>
-        </ol>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard/deposit" class="button">Submit New Deposit</a>
       </div>
-      
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/dashboard/deposit" class="button">
-          Submit New Deposit
-        </a>
-      </div>
-      
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 24px 0;">
-        <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
-          <strong style="color: #334155;">Need Assistance?</strong> Our support team is available 24/7. 
-          Contact us at <a href="mailto:support@stakesvault.com" class="footer-link">support@stakesvault.com</a> 
-          for help with this deposit.
-        </p>
-      </div>
-      
-      <div class="divider"></div>
-      
-      <p style="color: #64748b; font-size: 13px; line-height: 1.6; text-align: center;">
-        <strong style="color: #475569;">Security Notice:</strong> For your protection, please ensure you're submitting 
-        proof from your own wallet. Third-party transactions cannot be accepted.
-      </p>
     `
   }),
 
   withdrawal_received: (data: any) => ({
-    subject: "Withdrawal Request Received - Processing",
-    title: "Withdrawal Processing",
+    subject: "Withdrawal Processing",
+    title: "Withdrawal Request",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        We have received your withdrawal request. The requested amount has been deducted from your wallet 
-        and is now being processed by our team.
-      </p>
+      <p>Your withdrawal request is being processed.</p>
       
-      <div class="amount-highlight" style="color: #ef4444;">-$${data.amount} USDT</div>
+      <div class="amount-highlight" style="color: #ef4444;">-$${data.amount}</div>
       
       <table class="info-table">
         <tr>
           <td class="info-label">Request ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.requestId}</td>
+          <td class="info-value" style="font-family: monospace; font-size: 11px;">#${data.requestId.substring(0, 12)}...</td>
         </tr>
         <tr>
           <td class="info-label">Amount</td>
-          <td class="info-value">$${data.amount} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Destination</td>
-          <td class="info-value" style="font-family: monospace; font-size: 11px; word-break: break-all;">${data.walletAddress}</td>
+          <td class="info-value">$${data.amount}</td>
         </tr>
         <tr>
           <td class="info-label">Network</td>
-          <td class="info-value">TRC20 (TRON)</td>
+          <td class="info-value">TRC20</td>
         </tr>
         <tr>
           <td class="info-label">Status</td>
-          <td class="info-value">
-            <span style="background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">PROCESSING</span>
-          </td>
-        </tr>
-        <tr>
-          <td class="info-label">Submitted On</td>
-          <td class="info-value">${new Date(data.date).toLocaleString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</td>
+          <td class="info-value"><span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">PROCESSING</span></td>
         </tr>
       </table>
       
       <div class="alert-box">
-        <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-          <strong>⏰ Processing Time:</strong> Withdrawals are typically completed within <strong>24-48 hours</strong>. 
-          You'll receive a confirmation email once the payment is sent.
-        </p>
-      </div>
-
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 24px 0;">
-        <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
-          <strong style="color: #334155;">Security Check:</strong> Please verify the wallet address above matches your intended destination. 
-          Cryptocurrency transactions are irreversible.
+        <p style="margin: 0; color: #92400e; font-size: 13px;">
+          <strong>⏰ Completed within 24-48 hours.</strong> You'll be notified once sent.
         </p>
       </div>
     `
   }),
 
   withdrawal_approved: (data: any) => ({
-    subject: "Withdrawal Completed - Payment Sent Successfully",
-    title: "Withdrawal Confirmed",
+    subject: "Withdrawal Completed",
+    title: "Payment Sent",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        Great news! Your withdrawal has been approved and the payment has been successfully sent to your wallet.
-      </p>
+      <p>Your withdrawal has been completed!</p>
       
-      <div class="amount-highlight" style="color: #10b981;">$${data.amount} USDT</div>
+      <div class="amount-highlight" style="color: #10b981;">$${data.amount}</div>
       
       <div class="success-box">
-        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 15px;">✓ Payment Sent Successfully</p>
-        <p style="margin: 8px 0 0 0; color: #047857; font-size: 14px;">
-          The funds should arrive in your wallet within a few minutes.
-        </p>
+        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 13px;">✓ Payment Sent Successfully</p>
+        <p style="margin: 6px 0 0 0; color: #047857; font-size: 12px;">Funds arriving shortly</p>
       </div>
       
       <table class="info-table">
         <tr>
           <td class="info-label">Request ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.requestId}</td>
+          <td class="info-value" style="font-family: monospace; font-size: 11px;">#${data.requestId.substring(0, 12)}...</td>
         </tr>
         <tr>
-          <td class="info-label">Amount Sent</td>
-          <td class="info-value" style="color: #10b981;">$${data.amount} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Destination</td>
-          <td class="info-value" style="font-family: monospace; font-size: 11px; word-break: break-all;">${data.walletAddress}</td>
+          <td class="info-label">Amount</td>
+          <td class="info-value" style="color: #10b981;">$${data.amount}</td>
         </tr>
         <tr>
           <td class="info-label">Network</td>
-          <td class="info-value">TRC20 (TRON)</td>
-        </tr>
-        <tr>
-          <td class="info-label">Completed On</td>
-          <td class="info-value">${new Date(data.date).toLocaleString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</td>
+          <td class="info-value">TRC20</td>
         </tr>
       </table>
       
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/dashboard/withdraw" class="button">
-          View Withdrawal History
-        </a>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard/withdraw" class="button">View History</a>
       </div>
-
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 24px 0;">
-        <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
-          <strong style="color: #334155;">Transaction Note:</strong> You can track this transaction on the TRON blockchain 
-          using a block explorer. The funds should be visible in your wallet shortly.
-        </p>
-      </div>
-
-      <p style="color: #64748b; font-size: 14px; line-height: 1.7; margin-top: 32px;">
-        Thank you for using STAKES VAULT. We look forward to serving you again.
-      </p>
     `
   }),
 
   withdrawal_rejected: (data: any) => ({
-    subject: "Withdrawal Request Declined - Funds Refunded",
+    subject: "Withdrawal Declined - Funds Refunded",
     title: "Withdrawal Update",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        We have reviewed your withdrawal request and unfortunately, we are unable to process it. 
-        The full amount has been refunded to your wallet.
-      </p>
+      <p>We were unable to process your withdrawal. Funds have been refunded.</p>
       
       <table class="info-table">
         <tr>
           <td class="info-label">Request ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.requestId}</td>
+          <td class="info-value" style="font-family: monospace; font-size: 11px;">#${data.requestId.substring(0, 12)}...</td>
         </tr>
         <tr>
-          <td class="info-label">Amount Refunded</td>
-          <td class="info-value" style="color: #10b981; font-size: 16px;">$${data.amount} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Original Destination</td>
-          <td class="info-value" style="font-family: monospace; font-size: 11px; word-break: break-all;">${data.walletAddress}</td>
+          <td class="info-label">Refunded</td>
+          <td class="info-value" style="color: #10b981; font-size: 15px;">$${data.amount}</td>
         </tr>
         <tr>
           <td class="info-label">Status</td>
-          <td class="info-value">
-            <span style="background: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">DECLINED</span>
-          </td>
-        </tr>
-        <tr>
-          <td class="info-label">Reviewed On</td>
-          <td class="info-value">${new Date(data.date).toLocaleString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</td>
+          <td class="info-value"><span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">DECLINED</span></td>
         </tr>
       </table>
       
       <div class="danger-box">
-        <div style="display: flex; align-items: start; gap: 16px;">
-          <div style="width: 48px; height: 48px; background: #fee2e2; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-            <span style="font-size: 28px;">⚠️</span>
-          </div>
-          <div style="flex: 1;">
-            <p style="color: #991b1b; margin: 0 0 12px 0; font-weight: 600; font-size: 15px;">Reason for Declining</p>
-            <p style="color: #b91c1c; margin: 0; font-size: 14px; line-height: 1.7;">
-              ${data.reason || 'The wallet address provided was invalid or incompatible with the TRC20 network. Please verify your address and try again.'}
-            </p>
-          </div>
-        </div>
+        <p style="margin: 0 0 8px 0; color: #991b1b; font-weight: 600; font-size: 13px;">Reason</p>
+        <p style="color: #b91c1c; margin: 0; font-size: 12px; line-height: 1.5;">${data.reason || 'Invalid wallet address'}</p>
       </div>
       
       <div class="success-box">
-        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 15px;">✓ Funds Refunded to Your Account</p>
-        <p style="margin: 8px 0 0 0; color: #047857; font-size: 14px;">
-          The full amount has been credited back to your wallet. You can request a new withdrawal anytime.
-        </p>
+        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 13px;">✓ Funds Refunded</p>
+        <p style="margin: 6px 0 0 0; color: #047857; font-size: 12px;">You can submit a new request</p>
       </div>
       
-      <div style="background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 12px; padding: 24px; margin: 32px 0;">
-        <h3 style="color: #1e40af; margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">📋 How to Submit a Valid Request</h3>
-        <ol style="margin: 0; padding-left: 20px; color: #1e40af; line-height: 2; font-size: 14px;">
-          <li><strong>Verify</strong> your wallet address is correct and supports TRC20 (TRON) network</li>
-          <li><strong>Double-check</strong> the address format - it should start with "T" and be 34 characters long</li>
-          <li><strong>Test</strong> with a small amount first if you're using this address for the first time</li>
-          <li><strong>Submit</strong> a new withdrawal request with the verified address</li>
-        </ol>
-      </div>
-      
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/dashboard/withdraw" class="button">
-          Request New Withdrawal
-        </a>
-      </div>
-
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 24px 0;">
-        <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
-          <strong style="color: #334155;">Need Help?</strong> If you're unsure about your wallet address, 
-          contact our support team at <a href="mailto:support@stakesvault.com" class="footer-link">support@stakesvault.com</a>
-        </p>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard/withdraw" class="button">Request Again</a>
       </div>
     `
   }),
 
   stake_started: (data: any) => ({
-    subject: "Staking Activated - Your Investment is Now Growing",
+    subject: "Staking Activated - Growing Daily",
     title: "Stake Activated",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        Congratulations! Your staking plan has been successfully activated. Your funds are now locked and will earn 
-        <strong>1% daily compounding returns</strong> throughout the lock period.
-      </p>
+      <p>Your stake is now active with 1% daily compounding returns!</p>
       
-      <div class="amount-highlight" style="color: #8b5cf6;">$${data.amount} USDT</div>
+      <div class="amount-highlight" style="color: #8b5cf6;">$${data.amount}</div>
       
       <div class="success-box">
-        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 15px;">✓ Staking Successfully Activated</p>
-        <p style="margin: 8px 0 0 0; color: #047857; font-size: 14px;">
-          Your daily rewards will be automatically compounded and added to your stake balance.
-        </p>
+        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 13px;">✓ Staking Active</p>
+        <p style="margin: 6px 0 0 0; color: #047857; font-size: 12px;">Daily rewards compounding automatically</p>
       </div>
       
       <table class="info-table">
         <tr>
-          <td class="info-label">Stake ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.stakeId}</td>
+          <td class="info-label">Amount</td>
+          <td class="info-value" style="color: #8b5cf6;">$${data.amount}</td>
         </tr>
         <tr>
-          <td class="info-label">Amount Staked</td>
-          <td class="info-value" style="color: #8b5cf6; font-weight: 700;">$${data.amount} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Lock Period</td>
+          <td class="info-label">Period</td>
           <td class="info-value">${data.lockPeriod} Days</td>
         </tr>
         <tr>
-          <td class="info-label">Daily Return</td>
-          <td class="info-value" style="color: #10b981;">1% (Compounding)</td>
+          <td class="info-label">Daily</td>
+          <td class="info-value" style="color: #10b981;">1% Compound</td>
         </tr>
         <tr>
-          <td class="info-label">Start Date</td>
-          <td class="info-value">${new Date(data.startDate).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric'
-          })}</td>
-        </tr>
-        <tr>
-          <td class="info-label">Unlock Date</td>
-          <td class="info-value" style="color: #8b5cf6; font-weight: 600;">${new Date(data.unlockDate).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric'
-          })}</td>
-        </tr>
-        <tr>
-          <td class="info-label">Status</td>
-          <td class="info-value">
-            <span style="background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">LOCKED</span>
-          </td>
+          <td class="info-label">Unlock</td>
+          <td class="info-value">${new Date(data.unlockDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
         </tr>
       </table>
       
-      <div style="background: #f0f9ff; border: 2px solid #bae6fd; border-radius: 12px; padding: 24px; margin: 32px 0;">
-        <h3 style="color: #0369a1; margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">📊 Expected Returns</h3>
-        <p style="margin: 0; color: #0c4a6e; font-size: 14px; line-height: 1.8;">
-          With <strong>1% daily compounding</strong>, your ${data.amount} USDT stake will grow to approximately 
-          <strong style="color: #8b5cf6;">$${(data.amount * Math.pow(1.01, data.lockPeriod)).toFixed(2)} USDT</strong> 
-          by the end of the ${data.lockPeriod}-day period.
+      <div style="background: #f0f9ff; border: 2px solid #bae6fd; border-radius: 8px; padding: 14px; margin: 16px 0;">
+        <p style="margin: 0; color: #0c4a6e; font-size: 12px; line-height: 1.6;">
+          <strong style="color: #0369a1;">Expected:</strong> $${(data.amount * Math.pow(1.01, data.lockPeriod)).toFixed(2)} after ${data.lockPeriod} days
         </p>
       </div>
       
-      <div class="alert-box">
-        <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-          <strong>⏰ Important:</strong> Your funds will remain locked until ${new Date(data.unlockDate).toLocaleDateString('en-US', { 
-            month: 'long', 
-            day: 'numeric', 
-            year: 'numeric'
-          })}. 
-          You'll receive an email notification when your stake is unlocked and ready for withdrawal.
-        </p>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard/stakes" class="button">View Stakes</a>
       </div>
-
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/dashboard/stakes" class="button">
-          View Your Stakes
-        </a>
-      </div>
-
-      <p style="color: #64748b; font-size: 14px; line-height: 1.7; margin-top: 32px;">
-        Thank you for staking with STAKES VAULT. Your daily rewards will be automatically calculated and compounded!
-      </p>
     `
   }),
 
   stake_unlocked: (data: any) => ({
-    subject: "Stake Unlocked - Withdrawal Now Available",
+    subject: "Stake Unlocked - Withdraw Available",
     title: "Stake Unlocked",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        Great news! Your ${data.lockPeriod}-day staking period has been completed. Your stake is now unlocked and 
-        available for withdrawal.
-      </p>
+      <p>Your stake is now unlocked and ready for withdrawal!</p>
       
-      <div class="amount-highlight" style="color: #10b981;">$${data.finalAmount} USDT</div>
+      <div class="amount-highlight" style="color: #10b981;">$${data.finalAmount}</div>
       
       <div class="success-box">
-        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 15px;">✓ Staking Period Completed</p>
-        <p style="margin: 8px 0 0 0; color: #047857; font-size: 14px;">
-          Your funds are now unlocked and ready for withdrawal. You have 48 hours to withdraw before auto re-lock.
-        </p>
+        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 13px;">✓ Staking Completed</p>
+        <p style="margin: 6px 0 0 0; color: #047857; font-size: 12px;">48 hours to withdraw before auto re-lock</p>
       </div>
       
       <table class="info-table">
         <tr>
-          <td class="info-label">Stake ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.stakeId}</td>
+          <td class="info-label">Original</td>
+          <td class="info-value">$${data.originalAmount}</td>
         </tr>
         <tr>
-          <td class="info-label">Original Amount</td>
-          <td class="info-value">$${data.originalAmount} USDT</td>
+          <td class="info-label">Profit</td>
+          <td class="info-value" style="color: #10b981; font-weight: 700;">+$${data.totalProfit}</td>
         </tr>
         <tr>
-          <td class="info-label">Total Profit Earned</td>
-          <td class="info-value" style="color: #10b981; font-weight: 700;">+$${data.totalProfit} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Final Amount</td>
-          <td class="info-value" style="color: #10b981; font-size: 16px; font-weight: 700;">$${data.finalAmount} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Lock Period</td>
-          <td class="info-value">${data.lockPeriod} Days</td>
+          <td class="info-label">Final</td>
+          <td class="info-value" style="color: #10b981; font-size: 15px;">$${data.finalAmount}</td>
         </tr>
         <tr>
           <td class="info-label">Cycle</td>
-          <td class="info-value">Cycle #${data.cycle}</td>
-        </tr>
-        <tr>
-          <td class="info-label">Status</td>
-          <td class="info-value">
-            <span style="background: #d1fae5; color: #065f46; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">UNLOCKED</span>
-          </td>
+          <td class="info-value">#${data.cycle}</td>
         </tr>
       </table>
       
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/dashboard/stakes" class="button">
-          Withdraw Now
-        </a>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard/stakes" class="button">Withdraw Now</a>
       </div>
       
-      <div class="alert-box" style="background: #fef3c7; border-left-color: #f59e0b;">
-        <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-          <strong>⏰ Auto Re-Lock Notice:</strong> If you don't withdraw within <strong>48 hours</strong>, 
-          your stake will be automatically re-locked for another ${data.lockPeriod}-day period to continue earning rewards.
-        </p>
-      </div>
-
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 24px 0;">
-        <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
-          <strong style="color: #334155;">Want to continue earning?</strong> Simply leave your funds staked 
-          and they will automatically re-lock after 48 hours with the same ${data.lockPeriod}-day plan.
+      <div class="alert-box">
+        <p style="margin: 0; color: #92400e; font-size: 13px;">
+          <strong>⏰ Auto re-lock in 48 hours</strong> if not withdrawn
         </p>
       </div>
     `
   }),
 
   stake_withdrawal_completed: (data: any) => ({
-    subject: "Stake Withdrawal Completed - Funds Transferred",
-    title: "Withdrawal Completed",
+    subject: "Stake Withdrawal Completed",
+    title: "Withdrawal Done",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        Your stake withdrawal has been successfully processed. The funds have been transferred to your wallet 
-        and your stake has been automatically re-locked for the next cycle.
-      </p>
+      <p>Your stake withdrawal is complete!</p>
       
-      <div class="amount-highlight" style="color: #10b981;">$${data.amount} USDT</div>
+      <div class="amount-highlight" style="color: #10b981;">$${data.amount}</div>
       
       <div class="success-box">
-        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 15px;">✓ Withdrawal Successful</p>
-        <p style="margin: 8px 0 0 0; color: #047857; font-size: 14px;">
-          Funds transferred to your wallet. New wallet balance: <strong>$${data.newWalletBalance} USDT</strong>
-        </p>
+        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 13px;">✓ Funds Transferred</p>
+        <p style="margin: 6px 0 0 0; color: #047857; font-size: 12px;">New balance: <strong>$${data.newWalletBalance}</strong></p>
       </div>
       
       <table class="info-table">
         <tr>
-          <td class="info-label">Stake ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.stakeId}</td>
+          <td class="info-label">Withdrawn</td>
+          <td class="info-value" style="color: #10b981;">$${data.amount}</td>
         </tr>
         <tr>
-          <td class="info-label">Withdrawn Amount</td>
-          <td class="info-value" style="color: #10b981; font-weight: 700;">$${data.amount} USDT</td>
+          <td class="info-label">Wallet</td>
+          <td class="info-value">$${data.newWalletBalance}</td>
         </tr>
         <tr>
-          <td class="info-label">New Wallet Balance</td>
-          <td class="info-value" style="color: #10b981; font-size: 16px;">$${data.newWalletBalance} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Remaining Stake</td>
-          <td class="info-value" style="color: #8b5cf6;">$${data.remainingStake} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">Withdrawal Date</td>
-          <td class="info-value">${new Date(data.date).toLocaleString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</td>
+          <td class="info-label">Remaining</td>
+          <td class="info-value" style="color: #8b5cf6;">$${data.remainingStake}</td>
         </tr>
       </table>
       
       <div class="success-box" style="background: #ede9fe; border-left-color: #8b5cf6;">
-        <p style="margin: 0; color: #5b21b6; font-weight: 600; font-size: 15px;">🔄 Stake Automatically Re-Locked</p>
-        <p style="margin: 8px 0 0 0; color: #6d28d9; font-size: 14px;">
-          Your remaining stake of <strong>$${data.remainingStake} USDT</strong> has been re-locked for 
-          another ${data.lockPeriod}-day period (Cycle #${data.newCycle}). Daily rewards will continue!
-        </p>
+        <p style="margin: 0; color: #5b21b6; font-weight: 600; font-size: 13px;">🔄 Re-Locked for Cycle #${data.newCycle}</p>
+        <p style="margin: 6px 0 0 0; color: #6d28d9; font-size: 12px;">Remaining $${data.remainingStake} continues earning!</p>
       </div>
-
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/dashboard" class="button">
-          View Dashboard
-        </a>
+      
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard" class="button">View Dashboard</a>
       </div>
-
-      <p style="color: #64748b; font-size: 14px; line-height: 1.7; margin-top: 32px;">
-        Thank you for continuing to stake with STAKES VAULT!
-      </p>
     `
   }),
 
   stake_relocked: (data: any) => ({
-    subject: "Stake Automatically Re-Locked - New Cycle Started",
-    title: "Stake Re-Locked",
+    subject: "Stake Auto Re-Locked",
+    title: "Re-Locked",
     content: `
-      <p style="font-size: 16px; margin-bottom: 20px; color: #334155;">Dear <strong>${data.name}</strong>,</p>
+      <p>Dear <strong>${data.name}</strong>,</p>
       
-      <p style="color: #475569; line-height: 1.8; margin-bottom: 24px;">
-        Your stake has been automatically re-locked for another ${data.lockPeriod}-day period as you did not 
-        withdraw within the 48-hour window. Your daily rewards will continue to compound!
-      </p>
+      <p>Your stake has been automatically re-locked!</p>
       
-      <div class="amount-highlight" style="color: #8b5cf6;">$${data.amount} USDT</div>
+      <div class="amount-highlight" style="color: #8b5cf6;">$${data.amount}</div>
       
       <div class="success-box" style="background: #ede9fe; border-left-color: #8b5cf6;">
-        <p style="margin: 0; color: #5b21b6; font-weight: 600; font-size: 15px;">🔄 Stake Re-Locked Successfully</p>
-        <p style="margin: 8px 0 0 0; color: #6d28d9; font-size: 14px;">
-          Your stake is now locked for Cycle #${data.newCycle}. Daily 1% compounding continues!
-        </p>
+        <p style="margin: 0; color: #5b21b6; font-weight: 600; font-size: 13px;">🔄 Re-Locked for Cycle #${data.newCycle}</p>
+        <p style="margin: 6px 0 0 0; color: #6d28d9; font-size: 12px;">Daily 1% compounding continues</p>
       </div>
       
       <table class="info-table">
         <tr>
-          <td class="info-label">Stake ID</td>
-          <td class="info-value" style="font-family: monospace; font-size: 12px; word-break: break-all;">#${data.stakeId}</td>
+          <td class="info-label">Amount</td>
+          <td class="info-value" style="color: #8b5cf6;">$${data.amount}</td>
         </tr>
         <tr>
-          <td class="info-label">Current Amount</td>
-          <td class="info-value" style="color: #8b5cf6; font-weight: 700;">$${data.amount} USDT</td>
-        </tr>
-        <tr>
-          <td class="info-label">New Lock Period</td>
+          <td class="info-label">Period</td>
           <td class="info-value">${data.lockPeriod} Days</td>
         </tr>
         <tr>
           <td class="info-label">Cycle</td>
-          <td class="info-value">Cycle #${data.newCycle}</td>
+          <td class="info-value">#${data.newCycle}</td>
         </tr>
         <tr>
-          <td class="info-label">Daily Return</td>
-          <td class="info-value" style="color: #10b981;">1% (Compounding)</td>
-        </tr>
-        <tr>
-          <td class="info-label">New Start Date</td>
-          <td class="info-value">${new Date(data.newStartDate).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric'
-          })}</td>
-        </tr>
-        <tr>
-          <td class="info-label">New Unlock Date</td>
-          <td class="info-value" style="color: #8b5cf6; font-weight: 600;">${new Date(data.newUnlockDate).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric'
-          })}</td>
-        </tr>
-        <tr>
-          <td class="info-label">Status</td>
-          <td class="info-value">
-            <span style="background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">LOCKED</span>
-          </td>
+          <td class="info-label">Unlock</td>
+          <td class="info-value">${new Date(data.newUnlockDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
         </tr>
       </table>
       
-      <div style="background: #f0f9ff; border: 2px solid #bae6fd; border-radius: 12px; padding: 24px; margin: 32px 0;">
-        <h3 style="color: #0369a1; margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">📈 Continuous Growth</h3>
-        <p style="margin: 0; color: #0c4a6e; font-size: 14px; line-height: 1.8;">
-          Your stake continues to grow with <strong>1% daily compounding</strong>. The longer you keep your funds staked, 
-          the more you earn through the power of compound interest!
-        </p>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard/stakes" class="button">View Details</a>
       </div>
+    `
+  }),
 
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${process.env.NEXTAUTH_URL}/dashboard/stakes" class="button">
-          View Stake Details
-        </a>
+  // ⭐ NEW: Referral Joined
+  referral_joined: (data: any) => ({
+    subject: `🎉 New Referral - ${data.newUserName} Joined!`,
+    title: "New Referral",
+    content: `
+      <p>Dear <strong>${data.name}</strong>,</p>
+      
+      <p>Great news! A new user joined using your referral code!</p>
+      
+      <div class="success-box">
+        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 13px;">✓ Level ${data.level} Referral</p>
+        <p style="margin: 6px 0 0 0; color: #047857; font-size: 12px;">Your network is growing!</p>
       </div>
-
+      
+      <table class="info-table">
+        <tr>
+          <td class="info-label">Name</td>
+          <td class="info-value">${data.newUserName}</td>
+        </tr>
+        <tr>
+          <td class="info-label">Email</td>
+          <td class="info-value" style="font-size: 11px;">${data.newUserEmail}</td>
+        </tr>
+        <tr>
+          <td class="info-label">Level</td>
+          <td class="info-value">Level ${data.level}</td>
+        </tr>
+      </table>
+      
       <div class="alert-box" style="background: #dbeafe; border-left-color: #3b82f6;">
-        <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6;">
-          <strong>💡 Reminder:</strong> You'll be notified again when this cycle completes in ${data.lockPeriod} days. 
-          You'll have another 48-hour window to withdraw if desired.
+        <p style="margin: 0; color: #1e40af; font-size: 13px;">
+          <strong>💰 Earn Commissions:</strong> ${data.level === 1 ? '10%' : data.level === 2 ? '5%' : '2%'} on their deposits!
         </p>
       </div>
 
-      <p style="color: #64748b; font-size: 14px; line-height: 1.7; margin-top: 32px;">
-        Thank you for your continued trust in STAKES VAULT!
-      </p>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard/referral" class="button">View Network</a>
+      </div>
+    `
+  }),
+
+  // ⭐ NEW: Commission Earned
+  commission_earned: (data: any) => ({
+    subject: `💰 Commission Earned - $${data.amount.toFixed(2)}`,
+    title: "Commission Received",
+    content: `
+      <p>Dear <strong>${data.name}</strong>,</p>
+      
+      <p>You've earned a commission from your network!</p>
+      
+      <div class="amount-highlight" style="color: #10b981;">+$${data.amount.toFixed(2)}</div>
+      
+      <div class="success-box">
+        <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 13px;">✓ Commission Credited</p>
+        <p style="margin: 6px 0 0 0; color: #047857; font-size: 12px;">Added to your wallet balance</p>
+      </div>
+      
+      <table class="info-table">
+        <tr>
+          <td class="info-label">Amount</td>
+          <td class="info-value" style="color: #10b981; font-weight: 700;">+$${data.amount.toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td class="info-label">From</td>
+          <td class="info-value">${data.fromUser}</td>
+        </tr>
+        <tr>
+          <td class="info-label">Level</td>
+          <td class="info-value">Level ${data.level} (${data.level === 1 ? '10%' : data.level === 2 ? '5%' : '2%'})</td>
+        </tr>
+        <tr>
+          <td class="info-label">Type</td>
+          <td class="info-value">${data.transactionType}</td>
+        </tr>
+      </table>
+
+      <div style="background: #f0f9ff; border: 2px solid #bae6fd; border-radius: 8px; padding: 14px; margin: 16px 0;">
+        <p style="margin: 0; color: #0c4a6e; font-size: 12px;">
+          <strong style="color: #0369a1;">💡 Earn More:</strong> Share your referral code to build a larger network!
+        </p>
+      </div>
+
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard" class="button">View Dashboard</a>
+      </div>
+    `
+  }),
+
+  // ⭐ NEW: Level Income
+  level_income: (data: any) => ({
+    subject: `📈 Level Income - $${data.amount.toFixed(2)}`,
+    title: "Level Income",
+    content: `
+      <p>Dear <strong>${data.name}</strong>,</p>
+      
+      <p>You've received level income from your network!</p>
+      
+      <div class="amount-highlight" style="color: #8b5cf6;">+$${data.amount.toFixed(2)}</div>
+      
+      <div class="success-box" style="background: #ede9fe; border-left-color: #8b5cf6;">
+        <p style="margin: 0; color: #5b21b6; font-weight: 600; font-size: 13px;">✓ Level Income Added</p>
+        <p style="margin: 6px 0 0 0; color: #6d28d9; font-size: 12px;">Credited to your level income balance</p>
+      </div>
+      
+      <table class="info-table">
+        <tr>
+          <td class="info-label">Amount</td>
+          <td class="info-value" style="color: #8b5cf6; font-weight: 700;">+$${data.amount.toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td class="info-label">From</td>
+          <td class="info-value">${data.fromUser}</td>
+        </tr>
+        <tr>
+          <td class="info-label">Level</td>
+          <td class="info-value">Level ${data.level}</td>
+        </tr>
+      </table>
+
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.NEXTAUTH_URL}/dashboard/referral" class="button">View Network</a>
+      </div>
     `
   }),
 };
@@ -1161,18 +870,40 @@ export const emailService = {
   sendStakeWithdrawalCompleted: (to: string, name: string, amount: number, newWalletBalance: number, remainingStake: number, lockPeriod: number, newCycle: number, stakeId: string) =>
     sendEmail({ to, type: 'stake_withdrawal_completed', data: { name, amount, newWalletBalance, remainingStake, lockPeriod, newCycle, stakeId, date: new Date() } }),
 
-sendStakeRelocked: (to: string, name: string, amount: number, lockPeriod: number, cycle: number, unlockDate: Date, stakeId: string) =>
-  sendEmail({ 
-    to, 
-    type: 'stake_relocked', 
-    data: { 
-      name, 
-      amount, 
-      lockPeriod, 
-      newCycle: cycle,
-      newStartDate: new Date(),
-      newUnlockDate: unlockDate,
-      stakeId 
-    } 
-  }),
+  sendStakeRelocked: (to: string, name: string, amount: number, lockPeriod: number, cycle: number, unlockDate: Date, stakeId: string) =>
+    sendEmail({ 
+      to, 
+      type: 'stake_relocked', 
+      data: { 
+        name, 
+        amount, 
+        lockPeriod, 
+        newCycle: cycle,
+        newStartDate: new Date(),
+        newUnlockDate: unlockDate,
+        stakeId 
+      } 
+    }),
+
+  // ⭐ NEW: Referral Emails
+  sendReferralJoined: (to: string, name: string, newUserName: string, newUserEmail: string, level: number) =>
+    sendEmail({ 
+      to, 
+      type: 'referral_joined', 
+      data: { name, newUserName, newUserEmail, level } 
+    }),
+
+  sendCommissionEarned: (to: string, name: string, amount: number, fromUser: string, level: number, transactionType: string) =>
+    sendEmail({ 
+      to, 
+      type: 'commission_earned', 
+      data: { name, amount, fromUser, level, transactionType, date: new Date() } 
+    }),
+
+  sendLevelIncome: (to: string, name: string, amount: number, fromUser: string, level: number) =>
+    sendEmail({ 
+      to, 
+      type: 'level_income', 
+      data: { name, amount, fromUser, level, date: new Date() } 
+    }),
 };

@@ -15,9 +15,10 @@ const PAGINATION_LIMIT = 10;
 interface ReferralUser {
   email: string;
   totalDeposits: number;
-  totalStaked: number;
-  joinDate: string; // ISO Date String
+  stakedBalance: number;   // ✅ backend ka exact field
+  createdAt: string;       // ✅ backend ka exact field
 }
+
 
 interface StakeData {
   amount: number;
@@ -178,9 +179,9 @@ const DashboardPage: FC = () => {
           levelIncome: result.levelIncome || 0,
           stake: result.stake || null,
           referralCode: result.referralCode || "",
-          level1: result.level1 || [],
-          level2: result.level2 || [],
-          level3: result.level3 || [],
+level1: result.referralLevels?.level1?.users || [],
+level2: result.referralLevels?.level2?.users || [],
+level3: result.referralLevels?.level3?.users || [],
         });
       }
 
@@ -194,8 +195,7 @@ const DashboardPage: FC = () => {
 
   useEffect(() => {
     if (status === "authenticated" || localStorage.getItem("userId")) {
-      loadData();
-    }
+void loadData();    }
   }, [status]);
 
   // Reset page when level changes
@@ -601,11 +601,10 @@ const ReferralTable: FC<ReferralTableProps> = ({
                       ${user.totalDeposits.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-sm text-right font-semibold text-orange-400">
-                      ${user.totalStaked.toFixed(2)}
-                    </td>
+  ${user?.stakedBalance?.toFixed(2) || "0.00"}
+                  </td>
                     <td className="px-4 py-3 text-sm text-gray-400">
-                      {new Date(user.joinDate).toLocaleDateString()}
-                    </td>
+{user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}                 </td>
                   </tr>
                 ))}
               </tbody>
@@ -640,7 +639,8 @@ const ReferralTable: FC<ReferralTableProps> = ({
                     Staked
                   </span>
                   <span className="text-base font-bold text-orange-400">
-                    ${user.totalStaked.toFixed(2)}
+${user?.stakedBalance
+?.toFixed(2) || '0.00'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -648,7 +648,8 @@ const ReferralTable: FC<ReferralTableProps> = ({
                     Joined
                   </span>
                   <span className="text-sm text-gray-500">
-                    {new Date(user.joinDate).toLocaleDateString()}
+                    {new Date(user.createdAt
+).toLocaleDateString()}
                   </span>
                 </div>
               </div>

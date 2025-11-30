@@ -16,7 +16,10 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ✅ Google / NextAuth Token
-  const nextAuthToken = await getToken({ req: request });
+const nextAuthToken = await getToken({
+  req: request,
+  secret: process.env.NEXTAUTH_SECRET
+});
 
   // ✅ Custom JWT Token (your normal login)
   const customToken = request.cookies.get("token");

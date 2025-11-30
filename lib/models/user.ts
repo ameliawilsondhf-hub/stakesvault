@@ -15,6 +15,7 @@ interface ILoginIP {
     ip: string;
     lastLogin: Date;
     count: number;
+
 }
 
 interface ILoginHistory {
@@ -86,6 +87,7 @@ interface IBlockedIP {
     expiresAt: Date;
     reason: string;
     attemptCount: number;
+    
 }
 
 // --- Main User Interface ---
@@ -159,7 +161,14 @@ export interface IUser extends Document {
     referral?: string;
     referralCount: number;
     referredUsers: Types.ObjectId[];
-    
+    // ✅ Referral Upline Link (for commission system)
+referredBy?: Types.ObjectId;
+
+// ✅ Level-wise Incomes (for commission tracking)
+level1Income?: number;
+level2Income?: number;
+level3Income?: number;
+
     // Finance/Staking
     walletBalance: number;
     balance: number;
@@ -346,6 +355,13 @@ const UserSchema = new Schema<IUser>(
         referral: String,
         referralCount: { type: Number, default: 0 },
         referredUsers: [{ type: Schema.Types.ObjectId, ref: "User" }],
+// ✅ Upline link for commission distribution
+referredBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+
+// ✅ Level wise income tracking
+level1Income: { type: Number, default: 0 },
+level2Income: { type: Number, default: 0 },
+level3Income: { type: Number, default: 0 },
 
         walletBalance: { type: Number, default: 0 },
         balance: { type: Number, default: 0 },

@@ -4,6 +4,9 @@ import jwt from "jsonwebtoken";
 import Stake from "@/lib/models/stake";
 import connectDB from "@/lib/mongodb";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   try {
     await connectDB();
@@ -14,14 +17,24 @@ export async function GET() {
     if (!token) {
       return NextResponse.json(
         { success: false, msg: "No cookie token" },
-        { status: 401 }
+        {
+          status: 401,
+          headers: {
+            "Cache-Control": "no-store, max-age=0",
+          },
+        }
       );
     }
 
     if (!process.env.JWT_SECRET) {
       return NextResponse.json(
         { success: false, msg: "JWT SECRET missing" },
-        { status: 500 }
+        {
+          status: 500,
+          headers: {
+            "Cache-Control": "no-store, max-age=0",
+          },
+        }
       );
     }
 
@@ -31,7 +44,12 @@ export async function GET() {
     } catch (e) {
       return NextResponse.json(
         { success: false, msg: "Invalid token" },
-        { status: 401 }
+        {
+          status: 401,
+          headers: {
+            "Cache-Control": "no-store, max-age=0",
+          },
+        }
       );
     }
 
@@ -39,14 +57,27 @@ export async function GET() {
       createdAt: -1,
     });
 
-    return NextResponse.json({
-      success: true,
-      stakes,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        stakes,
+      },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { success: false, msg: "Server error", error: err.message },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
     );
   }
 }

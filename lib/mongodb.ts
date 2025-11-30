@@ -28,11 +28,20 @@ async function connectDB() {
       .then((mongoose) => {
         console.log("✅ MongoDB Connected");
         return mongoose;
+      })
+      .catch((error) => {
+        console.error("❌ MongoDB Connection Error:", error);
+        throw error;
       });
   }
 
-  cached.conn = await cached.promise;
-  return cached.conn;
+  try {
+    cached.conn = await cached.promise;
+    return cached.conn;
+  } catch (error) {
+    cached.promise = null; // Reset on failure so next request can retry
+    throw error;
+  }
 }
 
-export default connectDB; // ✔ DEFAULT EXPORT FIXED
+export default connectDB;

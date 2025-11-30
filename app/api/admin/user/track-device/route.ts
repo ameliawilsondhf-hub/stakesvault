@@ -4,6 +4,7 @@ import User from "@/lib/models/user";
 import { cookies, headers } from "next/headers";
 import jwt from "jsonwebtoken";
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // ✅ ADD THIS
 import { 
   getClientIP, 
   getLocationFromIP,
@@ -50,9 +51,9 @@ export async function POST(request: Request) {
     // ============================================
     
     // Try JWT token first (credentials login)
-    if (token) {
+    if (token && process.env.JWT_SECRET) {
       try {
-        const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
+        const decoded: any = jwt.verify(token, process.env.JWT_SECRET);
         userId = decoded.id;
         console.log("✅ JWT verified, userId:", userId);
       } catch (error) {
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
 
     // Try NextAuth session (OAuth login)
     if (!userId) {
-      const session = await getServerSession();
+      const session = await getServerSession(authOptions); // ✅ FIXED: Added authOptions
       
       if (session?.user?.email) {
         console.log("✅ NextAuth session found:", session.user.email);

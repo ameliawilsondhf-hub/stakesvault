@@ -42,12 +42,15 @@ export default function AdminStakesPage() {
 
   const loadData = async () => {
     try {
-      const res = await fetch("/api/stake/admin", { cache: "no-store" });
-      if (!res.ok) {
-        console.error("Failed to fetch stakes");
-        setLoading(false);
-        return;
-      }
+     const res = await fetch("/api/stake/admin", {
+  method: "GET",
+  cache: "no-store",
+  credentials: "include",   // ✅ THIS LINE IS MANDATORY
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
       const data = await res.json();
       console.log("Fetched stakes:", data);
       setStakes(data.stakes || []);

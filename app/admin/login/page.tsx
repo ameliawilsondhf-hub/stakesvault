@@ -239,7 +239,7 @@ export default function AdminLoginPage() {
                   </label>
                   <input
                     type="email"
-                    placeholder="admin@stakevault.com"
+                    placeholder="Enter admin email"
                     className="w-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white p-3.5 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-all"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}

@@ -11,6 +11,9 @@ import { Types } from "mongoose";
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// ⭐ ANTI-FRAUD CONFIGURATION
+const MIN_STAKE_PERCENT = 80; // 80% of deposits must be staked
+
 // 🔥 ENHANCED: Professional Referral User Interface
 interface ReferralUser {
   _id: Types.ObjectId;
@@ -23,7 +26,7 @@ interface ReferralUser {
   lastLogin?: Date;
 }
 
-// Dashboard Response with Professional Referral Details
+// Dashboard Response with Professional Referral Details + Withdrawal Eligibility
 interface DashboardResponse {
   success: boolean;
   walletBalance: number;
@@ -37,6 +40,17 @@ interface DashboardResponse {
   deposits: any[]; 
   stakes: any[]; 
   withdrawals: any[];
+  
+  // 🛡️ ANTI-FRAUD: Withdrawal eligibility
+  withdrawalEligibility: {
+    isEligible: boolean;
+    totalDeposits: number;
+    requiredStake: number;
+    currentActiveStake: number;
+    deficit: number;
+    minimumStakePercent: number;
+    message: string;
+  };
   
   // 🔥 PROFESSIONAL: Detailed referral levels
   referralLevels: {
@@ -102,7 +116,7 @@ export async function GET(request: Request) {
         const token = cookieStore.get("token"); 
         if (token && token.value) {
           const decoded: any = jwt.verify(token.value, process.env.JWT_SECRET!);
-          userId = decoded.id;
+          userId = decoded.id || decoded.userId;
         }
       } catch (err) {
         console.log("⚠️ JWT verification failed.");
@@ -110,58 +124,50 @@ export async function GET(request: Request) {
     }
 
     if (!userId) {
-      console.log("❌ No valid authentication found!");
-      return NextResponse.json({ error: "Unauthorized - Please login again" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized - Please login again" },
+        { status: 401, headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+      );
     }
     
     const queryStart = Date.now();
     
-    // 🔥 ENHANCED: Populate with more details
     const user = await User.findById(userId)
       .select('walletBalance stakedBalance totalDeposits totalWithdrawals referralCount referralEarnings levelIncome stakes referralCode level1 level2 level3') 
-      .populate({ 
-        path: 'level1', 
-        select: 'email name walletBalance stakedBalance totalDeposits createdAt lastLogin' 
-      })
-      .populate({ 
-        path: 'level2', 
-        select: 'email name walletBalance stakedBalance totalDeposits createdAt lastLogin' 
-      })
-      .populate({ 
-        path: 'level3', 
-        select: 'email name walletBalance stakedBalance totalDeposits createdAt lastLogin' 
-      })
+      .populate({ path: 'level1', select: 'email name walletBalance stakedBalance totalDeposits createdAt lastLogin' })
+      .populate({ path: 'level2', select: 'email name walletBalance stakedBalance totalDeposits createdAt lastLogin' })
+      .populate({ path: 'level3', select: 'email name walletBalance stakedBalance totalDeposits createdAt lastLogin' })
       .lean()
       .exec();
     
     const typedUser = user as unknown as UserWithPopulatedLevels; 
 
-    console.log(`⏱️ User Query: ${Date.now() - queryStart}ms`);
-
     if (!typedUser) {
-      console.log("❌ User not found in DB for ID:", userId);
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404, headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+      );
     }
 
-    // ✅ FETCH DEPOSITS 
-    const deposits = await Deposit.find({ userId })
-      .select('amount status screenshot createdAt')
-      .sort({ createdAt: -1 })
-      .lean()
-      .exec();
-    // ✅ FETCH WITHDRAWALS
-const Withdraw = (await import("@/lib/models/withdraw")).default;
-const withdrawals = await Withdraw.find({ userId })
-  .select('amount status walletAddress qrImage createdAt')
-  .sort({ createdAt: -1 })
-  .lean()
-  .exec();
-    // ✅ Process Stakes
-    const activeStakes = typedUser.stakes?.filter(
-      (stake: any) => stake.status === "active"
-    ) || [];
-    
-    // 🔥 PROFESSIONAL: Calculate referral level statistics
+    const deposits = await Deposit.find({ userId }).select('amount status screenshot createdAt').sort({ createdAt: -1 }).lean().exec();
+    const Withdraw = (await import("@/lib/models/withdraw")).default;
+    const withdrawals = await Withdraw.find({ userId }).select('amount status walletAddress qrImage createdAt').sort({ createdAt: -1 }).lean().exec();
+      
+    const activeStakes = typedUser.stakes?.filter((stake: any) => stake.status === "active") || [];
+
+    const totalDeposits = typedUser.totalDeposits || 0;
+    const requiredStake = totalDeposits * (MIN_STAKE_PERCENT / 100);
+    const totalActiveStake = activeStakes.reduce((sum: number, stake: any) => sum + (stake.amount || 0), 0);
+    const isEligible = totalActiveStake >= requiredStake;
+    const deficit = isEligible ? 0 : requiredStake - totalActiveStake;
+
+    let eligibilityMessage = "";
+    if (isEligible) {
+      eligibilityMessage = "You are eligible to withdraw funds.";
+    } else {
+      eligibilityMessage = `You need $${deficit.toFixed(2)} more in active stakes to withdraw. Required: $${requiredStake.toFixed(2)} (${MIN_STAKE_PERCENT}% of deposits).`;
+    }
+
     const calculateLevelStats = (users: ReferralUser[]) => {
       const totalDeposits = users.reduce((sum, u) => sum + (u.totalDeposits || 0), 0);
       const totalStaked = users.reduce((sum, u) => sum + (u.stakedBalance || 0), 0);
@@ -172,7 +178,6 @@ const withdrawals = await Withdraw.find({ userId })
     const level2Stats = calculateLevelStats(typedUser.level2 || []);
     const level3Stats = calculateLevelStats(typedUser.level3 || []);
 
-    // --- 2. Final Response Structure ---
     const responseData: DashboardResponse = {
       success: true,
       walletBalance: typedUser.walletBalance || 0,
@@ -183,10 +188,20 @@ const withdrawals = await Withdraw.find({ userId })
       referralEarnings: typedUser.referralEarnings || 0,
       levelIncome: typedUser.levelIncome || 0,
       referralCode: typedUser.referralCode || null,
-      deposits: deposits,
+      deposits,
       stakes: activeStakes,
-withdrawals: withdrawals,      
-      // 🔥 PROFESSIONAL: Detailed referral information
+      withdrawals,
+
+      withdrawalEligibility: {
+        isEligible,
+        totalDeposits,
+        requiredStake,
+        currentActiveStake: totalActiveStake,
+        deficit,
+        minimumStakePercent: MIN_STAKE_PERCENT,
+        message: eligibilityMessage
+      },
+
       referralLevels: {
         level1: {
           count: (typedUser.level1 || []).length,
@@ -209,20 +224,19 @@ withdrawals: withdrawals,
       },
     };
 
-    console.log(`⏱️ Total API Time: ${Date.now() - startTime}ms`);
-
     return NextResponse.json(responseData, {
       status: 200,
       headers: {
-        'Cache-Control': 'no-store, max-age=0',
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
       },
     });
 
   } catch (error: any) {
-    console.log("❌ Dashboard Route Error:", error.message || error);
-    return NextResponse.json({ 
-      error: "Server error",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined 
-    }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error", details: process.env.NODE_ENV === 'development' ? error.message : undefined },
+      { status: 500, headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   }
 }

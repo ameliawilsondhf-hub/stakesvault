@@ -5,6 +5,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
+
 import { 
   getClientIP, 
   getLocationFromIP, 
@@ -276,131 +278,110 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   
-  callbacks: {
-    async signIn({ user, account }) {
-      await connectDB();
+ callbacks: {
+  async signIn({ user, account }) {
+    await connectDB();
 
-      try {
-        let existingUser = await User.findOne({ email: user.email });
+    try {
+      let existingUser = await User.findOne({ email: user.email });
 
-        if (!existingUser) {
-          const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-          const currentIP = await getClientIP();
-          const currentLocation = await getLocationFromIP(currentIP);
-          
-          existingUser = await User.create({
-            name: user.name,
-            email: user.email,
-            emailVerified: true,
-            referralCode,
-            walletBalance: 0,
-            totalDeposits: 0,
-            levelIncome: 0,
-            referralEarnings: 0,
-            referralCount: 0,
-            level1: [],
-            level2: [],
-            level3: [],
-            registrationIP: currentIP,
-            registrationLocation: currentLocation,
-            ipAddress: currentIP,
-            currentLocation: currentLocation,
-            loginHistory: [],
-            devices: [],
-            securityAlerts: [],
-            loginStats: {
-              totalLogins: 1,
-              failedAttempts: 0,
-              uniqueDevices: 1,
-              uniqueLocations: 1
-            }
-          });
+      if (!existingUser) {
+        const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const currentIP = await getClientIP();
+        const currentLocation = await getLocationFromIP(currentIP);
 
-          console.log(`✅ New OAuth user created (${account?.provider}):`, user.email);
-        } else {
-          if (existingUser.isBanned) {
-            console.log(`🚫 Banned user OAuth login attempt: ${user.email}`);
-            throw new Error(`banned::${existingUser.banReason || "Account banned"}`);
+        existingUser = await User.create({
+          name: user.name,
+          email: user.email,
+          emailVerified: true,
+          referralCode,
+
+          // ✅ SAFE REFERRAL DEFAULT
+          referredBy: null,
+
+          walletBalance: 0,
+          totalDeposits: 0,
+          levelIncome: 0,
+          referralEarnings: 0,
+          referralCount: 0,
+          level1: [],
+          level2: [],
+          level3: [],
+          registrationIP: currentIP,
+          registrationLocation: currentLocation,
+          ipAddress: currentIP,
+          currentLocation: currentLocation,
+          loginHistory: [],
+          devices: [],
+          securityAlerts: [],
+          loginStats: {
+            totalLogins: 1,
+            failedAttempts: 0,
+            uniqueDevices: 1,
+            uniqueLocations: 1
           }
+        });
 
-          if (account?.provider) {
-            await trackUserLogin(existingUser, account.provider);
-          }
+        console.log(`✅ New OAuth user created: ${user.email}`);
+      }
 
-          if (!existingUser.emailVerified) {
-            existingUser.emailVerified = true;
-            await existingUser.save();
-            console.log("✅ Email auto-verified for OAuth user");
-          }
-        }
-
-        return true;
-      } catch (error: any) {
-        console.error("❌ Sign in error:", error);
-        
-        if (error.message?.includes("banned::")) {
-          throw error;
-        }
-        
+      if (existingUser?.isBanned) {
+        console.log("🚫 Banned user blocked safely");
         return false;
       }
-    },
 
-    async jwt({ token, user, account }) {
-      if (user) {
-        await connectDB();
-        const dbUser = await User.findOne({ email: user.email });
-        if (dbUser) {
-          token.id = dbUser._id?.toString() || String(dbUser._id);
-          token.sub = dbUser._id?.toString() || String(dbUser._id);
-          token.email = dbUser.email;
-          token.role = dbUser.isAdmin ? "admin" : "user";
-          token.isAdmin = dbUser.isAdmin || false;
-          token.provider = account?.provider || 'credentials';
-        }
+      if (account?.provider) {
+        await trackUserLogin(existingUser, account.provider);
       }
-      return token;
-    },
 
-    async session({ session, token }) {
-      if (token && session.user) {
-        (session.user as any).id = token.id as string;
-        (session.user as any).email = token.email as string;
-        (session.user as any).role = token.role as string;
-        (session.user as any).isAdmin = token.isAdmin as boolean;
-        (session.user as any).provider = token.provider as string;
+      if (!existingUser.emailVerified) {
+        existingUser.emailVerified = true;
+        await existingUser.save();
       }
-      return session;
-    },
 
-    // 🔥 FIXED REDIRECT CALLBACK
-    async redirect({ url, baseUrl }) {
-      console.log("🔄 Redirect:", { url, baseUrl });
-      
-      // ✅ Handle relative URLs (like "/dashboard")
-      if (url.startsWith("/")) {
-        console.log("✅ Relative URL detected, redirecting to:", `${baseUrl}${url}`);
-        return `${baseUrl}${url}`;
-      }
-      
-      // ✅ Check if URL is from same origin
-      try {
-        const urlObj = new URL(url);
-        const baseUrlObj = new URL(baseUrl);
-        
-        if (urlObj.origin === baseUrlObj.origin) {
-          console.log("✅ Same origin, allowing:", url);
-          return url;
-        }
-      } catch (e) {
-        console.log("⚠️ Invalid URL, using default");
-      }
-      
-      // ✅ Default: redirect to dashboard
-      console.log("✅ Default redirect to dashboard");
-      return `${baseUrl}/dashboard`;
+      return true;
+    } catch (err) {
+      console.error("❌ OAuth SignIn Error:", err);
+      return true;
     }
+  },  // ✅ ✅ ✅ YE COMMA SAB KUCH FIX KARTA HAI
+
+  async jwt({ token, user, account }) {
+    if (user) {
+      await connectDB();
+      const dbUser = await User.findOne({ email: user.email });
+
+      if (dbUser) {
+        token.id = dbUser._id.toString();
+        token.email = dbUser.email;
+        token.role = dbUser.isAdmin ? "admin" : "user";
+        token.isAdmin = dbUser.isAdmin || false;
+        token.provider = account?.provider || "credentials";
+      }
+    }
+    return token;
   },
+
+  async session({ session, token }) {
+    if (token && session.user) {
+      (session.user as any).id = token.id;
+      (session.user as any).email = token.email;
+      (session.user as any).role = token.role;
+      (session.user as any).isAdmin = token.isAdmin;
+      (session.user as any).provider = token.provider;
+    }
+    return session;
+  },
+
+  async redirect({ url, baseUrl }) {
+    if (url.startsWith("/")) return `${baseUrl}${url}`;
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.origin === baseUrl) return url;
+    } catch {}
+    return `${baseUrl}/dashboard`;
+  }
+},
 
   pages: {
     signIn: "/auth/login",

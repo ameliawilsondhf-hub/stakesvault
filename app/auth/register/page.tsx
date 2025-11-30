@@ -26,11 +26,14 @@ export default function RegisterPage() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const ref = params.get("ref");
-    if (ref) setReferral(ref);
-  }, []);
+ useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get("ref");
+
+  if (ref) {
+    document.cookie = `ref=${ref}; path=/; max-age=86400`; // 24 hours
+  }
+}, []);
 
   const toggleDark = () => setDark(!dark);
 
