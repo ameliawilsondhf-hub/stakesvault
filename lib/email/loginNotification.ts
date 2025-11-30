@@ -59,240 +59,187 @@ function getEmailTemplate(data: LoginEmailData): string {
   const formattedDate = formatDate(data.timestamp);
   const loginMethodText = data.loginMethod === 'google' ? 'Google Sign-In' : 'Email & Password';
 
-  return `
+return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StakeVault Security Alert</title>
   <style>
     body {
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background-color: #f5f5f5;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     }
     .container {
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #ffffff;
+      max-width: 620px;
+      margin: 40px auto;
+      background: #0b0f1a;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.08);
     }
     .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      padding: 30px;
+      background: linear-gradient(135deg, #ff8a00, #ff2f92);
+      padding: 28px;
       text-align: center;
-    }
-    .logo {
-      color: #ffffff;
-      font-size: 28px;
-      font-weight: bold;
-      margin: 0;
+      color: white;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
     }
     .content {
-      padding: 40px 30px;
+      padding: 32px 26px;
+      color: #e5e7eb;
     }
     .alert-box {
-      background-color: #fff3cd;
-      border-left: 4px solid #ffc107;
-      padding: 15px;
-      margin-bottom: 25px;
-      border-radius: 4px;
+      background: rgba(255,138,0,0.15);
+      border-left: 4px solid #ff8a00;
+      padding: 14px;
+      border-radius: 8px;
+      margin-bottom: 22px;
+      font-weight: 600;
+      color: #ffd28a;
     }
-    .alert-title {
-      color: #856404;
-      font-weight: bold;
-      margin: 0 0 8px 0;
-      font-size: 16px;
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 10px;
     }
-    .alert-text {
-      color: #856404;
-      margin: 0;
-      font-size: 14px;
-    }
-    .greeting {
-      font-size: 18px;
-      color: #333;
-      margin-bottom: 20px;
+    .text {
+      font-size: 15px;
+      color: #cbd5e1;
+      line-height: 1.6;
     }
     .info-box {
-      background-color: #f8f9fa;
-      border: 1px solid #e9ecef;
-      border-radius: 8px;
-      padding: 20px;
-      margin: 25px 0;
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 18px;
+      margin-top: 22px;
+      border: 1px solid rgba(255,255,255,0.08);
     }
     .info-row {
       display: flex;
-      padding: 12px 0;
-      border-bottom: 1px solid #e9ecef;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 14px;
     }
     .info-row:last-child {
       border-bottom: none;
     }
-    .info-label {
-      color: #6c757d;
-      font-size: 14px;
-      min-width: 140px;
-      font-weight: 500;
+    .label {
+      color: #94a3b8;
     }
-    .info-value {
-      color: #212529;
-      font-size: 14px;
+    .value {
+      color: #e5e7eb;
       font-weight: 600;
-      word-break: break-all;
     }
-    .security-notice {
-      background-color: #e7f3ff;
-      border-left: 4px solid #2196F3;
-      padding: 15px;
-      margin: 25px 0;
-      border-radius: 4px;
-    }
-    .security-title {
-      color: #1976D2;
-      font-weight: bold;
-      margin: 0 0 8px 0;
-      font-size: 15px;
-    }
-    .security-text {
-      color: #1976D2;
-      margin: 0;
-      font-size: 13px;
-      line-height: 1.6;
-    }
-    .button {
-      display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #ffffff !important;
-      text-decoration: none;
-      padding: 12px 30px;
-      border-radius: 6px;
-      font-weight: 600;
-      margin: 20px 0;
+    .cta-box {
+      margin-top: 34px;
       text-align: center;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 34px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #ff8a00, #ff2f92);
+      color: white !important;
+      font-weight: 800;
+      font-size: 15px;
+      text-decoration: none;
+      box-shadow: 0 0 20px rgba(255,138,0,0.6);
     }
     .footer {
-      background-color: #f8f9fa;
-      padding: 25px 30px;
       text-align: center;
-      color: #6c757d;
+      padding: 22px;
       font-size: 12px;
-      line-height: 1.6;
-    }
-    .footer a {
-      color: #667eea;
-      text-decoration: none;
+      color: #94a3b8;
+      background: #060914;
     }
     @media only screen and (max-width: 600px) {
-      .content {
-        padding: 20px 15px;
+      .container {
+        margin: 12px;
       }
-      .info-row {
-        flex-direction: column;
+      .header {
+        font-size: 22px;
       }
-      .info-label {
-        margin-bottom: 5px;
+      .btn {
+        width: 100%;
       }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Header -->
-    <div class="header">
-      <h1 class="logo">🔐 StakeVault Security Alert</h1>
-    </div>
+    <div class="header">🔐 StakeVault Security Alert</div>
 
-    <!-- Content -->
     <div class="content">
+
       <div class="alert-box">
-        <p class="alert-title">⚠️ New Login Detected</p>
-        <p class="alert-text">We detected a new sign-in to your StakeVault account.</p>
+        ⚠️ New Login Detected on Your Account
       </div>
 
-      <p class="greeting">Hello <strong>${data.userName}</strong>,</p>
-      
-      <p style="color: #666; line-height: 1.6; font-size: 15px;">
-        Your account was just accessed. If this was you, you can safely ignore this email. 
-        If you don't recognize this activity, please secure your account immediately.
-      </p>
+      <div class="title">Hello ${data.userName},</div>
+      <div class="text">
+        We detected a new sign-in to your StakeVault account.  
+        If this was you, no action is required.  
+        If you don’t recognize this login, secure your account immediately.
+      </div>
 
-      <!-- Login Details -->
       <div class="info-box">
-        <h3 style="margin: 0 0 15px 0; color: #333; font-size: 16px;">Login Details</h3>
-        
         <div class="info-row">
-          <span class="info-label">📅 Date & Time:</span>
-          <span class="info-value">${formattedDate}</span>
+          <span class="label">📅 Date & Time</span>
+          <span class="value">${formattedDate}</span>
         </div>
-        
         <div class="info-row">
-          <span class="info-label">🔑 Login Method:</span>
-          <span class="info-value">${loginMethodText}</span>
+          <span class="label">🔑 Login Method</span>
+          <span class="value">${loginMethodText}</span>
         </div>
-        
         <div class="info-row">
-          <span class="info-label">🌐 IP Address:</span>
-          <span class="info-value">${data.ipAddress}</span>
+          <span class="label">🌐 IP Address</span>
+          <span class="value">${data.ipAddress}</span>
         </div>
-        
         <div class="info-row">
-          <span class="info-label">💻 Device:</span>
-          <span class="info-value">${device}</span>
+          <span class="label">💻 Device</span>
+          <span class="value">${device}</span>
         </div>
-        
         <div class="info-row">
-          <span class="info-label">🌍 Browser:</span>
-          <span class="info-value">${browser}</span>
+          <span class="label">🌍 Browser</span>
+          <span class="value">${browser}</span>
         </div>
-        
         ${data.location ? `
         <div class="info-row">
-          <span class="info-label">📍 Location:</span>
-          <span class="info-value">${data.location}</span>
+          <span class="label">📍 Location</span>
+          <span class="value">${data.location}</span>
         </div>
-        ` : ''}
+        ` : ``}
       </div>
 
-      <!-- Security Notice -->
-      <div class="security-notice">
-        <p class="security-title">🛡️ Wasn't You?</p>
-        <p class="security-text">
-          If you didn't sign in, someone else might have access to your account. 
-          Please change your password immediately and enable two-factor authentication.
-        </p>
+      <div class="cta-box">
+        <a href="https://stakesvault.com/auth/forgot-password" class="btn">
+          🔐 Secure My Account
+        </a>
       </div>
 
-      <center>
-       <a href="${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/profile" class="button">
-  Secure My Account
-</a>
-
-      </center>
     </div>
 
-    <!-- Footer -->
     <div class="footer">
-      <p style="margin: 0 0 10px 0;">
-        <strong>This is an automated security notification</strong>
-      </p>
-      <p style="margin: 0 0 10px 0;">
-        You're receiving this because login notifications are enabled for your account.
-      </p>
-      <p style="margin: 0;">
-       <a href="${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/profile">Manage Settings</a> • 
-<a href="mailto:support@stakevault.com">Contact Support</a>
-
-      </p>
-      <p style="margin: 15px 0 0 0; color: #adb5bd;">
-        © ${new Date().getFullYear()} StakeVault. All rights reserved.
-      </p>
+      This is an automated security alert from StakeVault.<br/>
+      If this wasn't you, please reset your password immediately.
+      <br/><br/>
+      © ${new Date().getFullYear()} StakeVault. All rights reserved.
     </div>
+
   </div>
 </body>
 </html>
-  `;
+`;
 }
+
 
 // Send login notification email
 export async function sendLoginNotification(data: LoginEmailData): Promise<boolean> {
