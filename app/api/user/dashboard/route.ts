@@ -9,9 +9,6 @@ import { authOptions } from "../../auth/[...nextauth]/route";
 import { Types } from "mongoose";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 // ⭐ ANTI-FRAUD CONFIGURATION

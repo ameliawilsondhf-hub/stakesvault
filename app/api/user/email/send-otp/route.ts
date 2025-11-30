@@ -8,9 +8,6 @@ import User from "@/lib/models/user";
 import { Resend } from "resend";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export const dynamic = 'force-dynamic';
 
 const resend = new Resend(process.env.RESEND_API_KEY || '');
 

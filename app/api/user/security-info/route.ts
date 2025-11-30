@@ -7,9 +7,6 @@ import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {

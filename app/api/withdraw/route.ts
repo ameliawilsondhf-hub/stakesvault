@@ -9,9 +9,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { emailService } from "@/lib/email-service";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export const dynamic = 'force-dynamic';
 
 // ⭐ SMART WITHDRAWAL CONFIGURATION
 const MIN_STAKE_PERCENT = 80; // User must have 80% of deposits staked

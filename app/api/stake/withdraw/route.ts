@@ -7,9 +7,6 @@ import Stake from "@/lib/models/stake";
 import Withdraw from "@/lib/models/withdraw";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";

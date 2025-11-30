@@ -6,9 +6,6 @@ import User from "@/lib/models/user";
 import Stake from "@/lib/models/stake";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";

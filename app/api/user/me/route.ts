@@ -7,9 +7,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {

@@ -7,9 +7,6 @@ import Stake from "@/lib/models/stake";
 import { emailService } from "@/lib/email-service";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
