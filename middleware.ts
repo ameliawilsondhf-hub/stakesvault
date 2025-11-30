@@ -4,9 +4,9 @@ import { getToken } from "next-auth/jwt";
 
 /**
  * ============================================
- * 🔒 ROUTE PROXY & AUTHENTICATION MIDDLEWARE
+ * 🔐 ROUTE PROXY & AUTHENTICATION MIDDLEWARE
  * ============================================
- * Supports:
+ * ✅ Supports:
  * ✅ Normal JWT login (token cookie)
  * ✅ Google OAuth via NextAuth
  * ✅ Vercel compatible
@@ -15,57 +15,42 @@ import { getToken } from "next-auth/jwt";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ✅ Google / NextAuth Token
-const nextAuthToken = await getToken({
-  req: request,
-  secret: process.env.NEXTAUTH_SECRET
-});
+  // ✅ Public Routes (NO AUTH REQUIRED)
+  const publicRoutes = [
+    "/",
+    "/login",
+    "/register",
+    "/admin/login",
+    "/api/auth",
+  ];
 
-  // ✅ Custom JWT Token (your normal login)
-  const customToken = request.cookies.get("token");
-
-  // ✅ Final authentication check
-  const isAuthenticated = nextAuthToken || customToken;
-
-  // ============================================
-  // 🛡️ ADMIN PROXY LAYER
-  // ============================================
-  if (pathname.startsWith("/admin")) {
-
-    // ✅ Allow admin login page without authentication
-    if (pathname === "/admin/login") {
-      if (isAuthenticated) {
-        return NextResponse.redirect(new URL("/admin", request.url));
-      }
-      return NextResponse.next();
-    }
-
-    // 🚨 Block all other admin routes without auth
-    if (!isAuthenticated) {
-      return NextResponse.redirect(new URL("/admin/login", request.url));
-    }
+  if (publicRoutes.some((route) => pathname.startsWith(route))) {
+    return NextResponse.next();
   }
 
-  // ============================================
-  // 🛡️ DASHBOARD PROXY LAYER
-  // ============================================
-  if (pathname.startsWith("/dashboard")) {
-    if (!isAuthenticated) {
-      return NextResponse.redirect(new URL("/auth/login", request.url));
-    }
+  // ✅ Get token from NextAuth / JWT
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  // ❌ If NOT logged in → redirect to login
+  if (!token) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();
 }
 
-/**
- * ============================================
- * 🎯 MATCHER CONFIGURATION
- * ============================================
- */
+// ✅ IMPORTANT: Matcher config (Vercel safe)
 export const config = {
   matcher: [
-    "/admin/:path*",      
-    "/dashboard/:path*",  
+    "/dashboard/:path*",
+    "/wallet/:path*",
+    "/stake/:path*",
+    "/deposit/:path*",
+    "/withdraw/:path*",
+    "/profile/:path*",
+    "/referrals/:path*",
   ],
 };

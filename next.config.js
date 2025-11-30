@@ -1,7 +1,6 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  // ✅ Disable React Strict Mode to prevent duplicate API calls in development
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // ✅ Disable React Strict Mode
   reactStrictMode: false,
 
   // ✅ TypeScript build configuration
@@ -26,4 +25,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
