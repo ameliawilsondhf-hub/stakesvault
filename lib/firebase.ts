@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -10,6 +10,25 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
+// ✅ Initialize Firebase App (only once)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 
-export const db = getFirestore(app);
+// ✅ Initialize Firestore with settings to prevent offline errors
+let db;
+
+if (typeof window !== 'undefined') {
+  // Client-side only initialization
+  try {
+    db = initializeFirestore(app, {
+      experimentalForceLongPolling: true, // Fixes connection issues
+    });
+  } catch (error) {
+    // If already initialized, get existing instance
+    db = getFirestore(app);
+  }
+} else {
+  // Server-side: just export undefined (won't be used during build)
+  db = undefined as any;
+}
+
+export { db };
