@@ -4,12 +4,13 @@ import { getToken } from "next-auth/jwt";
 
 /**
  * ============================================
- * 🔐 ROUTE PROXY & AUTHENTICATION MIDDLEWARE
+ * 🔐 FINAL AUTH + 2FA AWARE MIDDLEWARE
  * ============================================
  * ✅ Supports:
- * ✅ Normal JWT login (token cookie)
- * ✅ Google OAuth via NextAuth
- * ✅ Vercel compatible
+ * ✅ Normal JWT login
+ * ✅ Google OAuth (NextAuth)
+ * ✅ 2FA Protection
+ * ✅ NO MORE LOGIN LOOP
  */
 
 export async function middleware(request: NextRequest) {
@@ -22,6 +23,8 @@ export async function middleware(request: NextRequest) {
     "/register",
     "/admin/login",
     "/api/auth",
+    "/auth/verify-otp",        // ✅ OTP verify page allow
+    "/auth/forgot-password",  // ✅ password reset allow
   ];
 
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
@@ -29,7 +32,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ✅ Get token from NextAuth / JWT
-  const token = await getToken({
+  const token: any = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
   });
@@ -39,10 +42,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  // ✅ ✅ ✅ 2FA LOOP STOPPER (MOST IMPORTANT PART)
+  if (token.twoFactorVerified !== true) {
+    return NextResponse.redirect(new URL("/auth/verify-otp", request.url));
+  }
+
   return NextResponse.next();
 }
 
-// ✅ IMPORTANT: Matcher config (Vercel safe)
+// ✅ ✅ FINAL MATCHER (CLEAN + SAFE)
 export const config = {
   matcher: [
     "/dashboard/:path*",
@@ -52,5 +60,6 @@ export const config = {
     "/withdraw/:path*",
     "/profile/:path*",
     "/referrals/:path*",
+    "/settings/:path*",
   ],
 };
