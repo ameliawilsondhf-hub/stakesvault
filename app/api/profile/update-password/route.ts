@@ -4,6 +4,9 @@ import User from "@/lib/models/user";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(req: Request) {
   try {
     await connectDB();

@@ -8,6 +8,9 @@ import User from "@/lib/models/user";
 import { sendWelcomeEmail } from "@/lib/emails/welcomeEmail";
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {

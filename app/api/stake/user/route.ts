@@ -4,6 +4,9 @@ import jwt from "jsonwebtoken";
 import Stake from "@/lib/models/stake";
 import connectDB from "@/lib/mongodb";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 

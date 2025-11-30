@@ -4,6 +4,9 @@ import User from "@/lib/models/user";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 export async function GET() {
   try {
     await connectDB();

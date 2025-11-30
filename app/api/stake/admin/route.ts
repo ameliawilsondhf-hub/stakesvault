@@ -5,6 +5,9 @@ import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import Stake from "@/lib/models/stake";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 

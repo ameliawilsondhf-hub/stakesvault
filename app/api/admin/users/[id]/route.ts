@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
-
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 /**
  * GET /api/admin/users/[id]
  * Fetch detailed information for a specific user

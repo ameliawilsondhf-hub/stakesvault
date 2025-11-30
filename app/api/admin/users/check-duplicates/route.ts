@@ -4,6 +4,9 @@ import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 /**
  * GET /api/admin/users/check-duplicates
  * Find users sharing the same IP addresses (potential duplicate accounts)

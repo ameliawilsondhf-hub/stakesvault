@@ -4,6 +4,9 @@ import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import Stake from "@/lib/models/stake";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 export async function GET(req: Request) {

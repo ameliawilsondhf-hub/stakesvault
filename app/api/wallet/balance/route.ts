@@ -4,6 +4,9 @@ import User from "@/lib/models/user";
 import { cookies } from "next/headers";
 import mongoose from "mongoose";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET() {
   try {
     await connectDB();

@@ -3,6 +3,9 @@ import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import { cookies } from "next/headers";
 
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   try {
     await connectDB();

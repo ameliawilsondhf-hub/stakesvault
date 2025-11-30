@@ -6,6 +6,9 @@ import User from "@/lib/models/user";
 import Stake from "@/lib/models/stake";
 import Withdraw from "@/lib/models/withdraw";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 

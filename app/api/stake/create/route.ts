@@ -9,6 +9,7 @@ import Stake from "@/lib/models/stake";
 import { emailService } from "@/lib/email-service";
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'; // ✅ Add this
 
 // APY calculator - Daily 1% Compounding
 function calculateAPY(lockPeriod: number): number {
@@ -17,6 +18,8 @@ function calculateAPY(lockPeriod: number): number {
 }
 
 export async function POST(req: Request) {
+  // ... rest of your code stays same
+
     try {
         await connectDB();
 

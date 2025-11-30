@@ -9,6 +9,9 @@ import { authOptions } from "../../auth/[...nextauth]/route";
 import { emailService } from "@/lib/email-service";
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+export const dynamic = 'force-dynamic';
 
 // Cloudinary upload function
 async function uploadToCloudinary(base64Image: string): Promise<string> {

@@ -4,6 +4,9 @@ import jwt from "jsonwebtoken";
 import connectDB from "@/lib/db";
 import User, { IUser } from "@/lib/models/user"; // ✅ IUser import kiya for typing
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(req: Request) {
     try {
         await connectDB();
