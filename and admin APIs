@@ -1,0 +1,43 @@
+[33mcb32d15[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Fix email template TS error and footer syntax
+[33m04dfcc8[m Remove nodemailer Gmail SMTP and switch login notification to Resend
+[33ma78cffb[m Fix 2FA infinite loop and middleware auth guard
+[33me5c744e[m Fix auto-invest update API and user profile API
+[33mef58ea7[m fix: professional hybrid auth implementation with improved error handling
+[33mf06bc00[m fix: mongoose securityLogs and securityAlerts schema type conflict
+[33mb2659f4[m Fix admin pages and admin APIs
+[33m0b30a88[m Fix admin APIs, stats safety, deposit list security, users optimization
+[33m516442f[m Fixed Firebase config and all deployment issues - Production ready
+[33ma02c723[m Fix Firestore offline errors during build
+[33m620fe16[m Add login email notifications with IP tracking and location detection
+[33m705ecc2[m Fix admin user details - add deposits, withdrawals, IP tracking
+[33m9b6fddf[m fix: sync IP detection across security modules
+[33m47ef17b[m fix: enhance IP detection for Vercel deployment
+[33ma147a0d[m fix: add dynamic export and filename validation to uploads route
+[33m79140c9[m fix: add dynamic to app/auth/logout
+[33m19056c0[m fix: ensure all routes have dynamic export
+[33m57ce6fb[m fix: remove duplicate dynamic exports
+[33m57e66e3[m fix: add force-dynamic to all API routes for Vercel deployment
+[33m4486435[m Restore proxy back to middleware
+[33m52eec85[m Ready for deployment
+[33mb567bed[m final deploy updates
+[33mf3b12bd[m final deploy updates
+[33m06536e9[m Fix admin level income modal, keys warning, UI layout, search filters
+[33m94fe1f6[m Restructure admin user APIs, fix middleware, auth and security updates
+[33m1765959[m 🚀 Production deployment fixes - Nov 28, 2025
+[33md880d90[m Production fixes: OAuth, Resend API, security updates
+[33mfce4b8f[m Fixed Resend API initialization
+[33m84a204a[m Full email system overhaul: Resend integration, stakesvault domain fix, admin/user OTP, forgot password, welcome mail, env updates and auth fixes
+[33m84883e5[m fixed firebase and deposit page errors
+[33m262d4fa[m Updated homepage, links fixed
+[33m8744287[m fixed login page and errors
+[33m4f0877e[m Update homepage and add login functionality
+[33m371b75c[m Fix: Remove middleware, update configs, add support-chat route
+[33mb052c48[m Add support-chat API route
+[33m5433898[m Fix tsconfig jsx setting
+[33m2d516d2[m Fix import paths and remove .next from git
+[33mf52da68[m Fix build errors
+[33m852549e[m Fix mongodb default export
+[33m1ec3afb[m Clear cache and rebuild
+[33md6f12de[m Update mongodb.ts
+[33ma3d1eb6[m first commit
+[33mf893abd[m Initial commit

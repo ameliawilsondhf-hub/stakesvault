@@ -1,462 +1,394 @@
-// ===================================================================
-// 🔧 FIXED ADMIN LOGIN WITH COMPLETE TRACKING
-// File: app/api/admin/auth/login/route.ts
-// ===================================================================
+"use client";
 
-import { NextResponse } from "next/server";
-import connectDB from "@/lib/mongodb";
-import User, { IUser } from "@/lib/models/user";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import crypto from "crypto";
-import { headers } from "next/headers";
-import { sendLoginNotification } from "@/lib/email/loginNotification";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export default function AdminLoginPage() {
+  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  const [step, setStep] = useState<"credentials" | "otp">("credentials");
+  
+  // Step 1: Credentials
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Step 2: OTP
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [tempToken, setTempToken] = useState("");
+  const [otpSentTo, setOtpSentTo] = useState("");
+  const [resendTimer, setResendTimer] = useState(60);
+  
+  // UI States
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [dark, setDark] = useState(false);
 
-// 🔥 IP BLOCKING CONFIGURATION
-const MAX_ATTEMPTS = 5;
-const BLOCK_DURATION = 60 * 60 * 1000; // 60 minutes
-const ATTEMPT_WINDOW = 5 * 60 * 1000; // 5 minutes
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-// 🔧 Get client IP
-function getClientIP(): string {
-  try {
-    const headersList = headers();
-    const forwarded = headersList.get("x-forwarded-for");
-    const realIP = headersList.get("x-real-ip");
-    const cfIP = headersList.get("cf-connecting-ip");
+  useEffect(() => {
+    if (!mounted) return;
+    const isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setDark(isDarkMode);
+  }, [mounted]);
 
-    if (forwarded) return forwarded.split(",")[0].trim();
-    if (realIP) return realIP;
-    if (cfIP) return cfIP;
-
-    return "unknown";
-  } catch {
-    return "unknown";
-  }
-}
-
-
-// 🔧 Parse User Agent
-function parseUserAgent(userAgent: string) {
-  let device = "Desktop";
-  let browser = "Unknown Browser";
-  let os = "Unknown OS";
-
-  // Detect OS
-  if (userAgent.includes("Windows NT 10.0")) os = "Windows 10";
-  else if (userAgent.includes("Windows NT 6.3")) os = "Windows 8.1";
-  else if (userAgent.includes("Mac OS X")) os = "macOS";
-  else if (userAgent.includes("Android")) os = "Android";
-  else if (userAgent.includes("Linux")) os = "Linux";
-  else if (userAgent.includes("iPhone") || userAgent.includes("iPad")) os = "iOS";
-
-  // Detect Device
-  if (/mobile/i.test(userAgent)) device = "Mobile";
-  else if (/tablet/i.test(userAgent)) device = "Tablet";
-
-  // Detect Browser
-  if (userAgent.includes("Edg")) browser = "Edge";
-  else if (userAgent.includes("Chrome") && !userAgent.includes("Edg")) browser = "Chrome";
-  else if (userAgent.includes("Safari") && !userAgent.includes("Chrome")) browser = "Safari";
-  else if (userAgent.includes("Firefox")) browser = "Firefox";
-  else if (userAgent.includes("Opera") || userAgent.includes("OPR")) browser = "Opera";
-
-  return { device, browser, os };
-}
-
-// 🌍 Get Location from IP
-async function getLocationFromIP(ip: string): Promise<string> {
-  try {
-    if (ip === "unknown" || ip === "::1" || ip === "127.0.0.1") {
-      return "Local Network";
-    }
-
-    const response = await fetch(`https://ipapi.co/${ip}/json/`, {
-      headers: { 'User-Agent': 'StakeVault/1.0' },
-      signal: AbortSignal.timeout(3000)
-    });
+  // OTP Resend Timer
+  useEffect(() => {
+    if (step !== "otp" || resendTimer <= 0) return;
     
-    if (!response.ok) return "Unknown Location";
+    const interval = setInterval(() => {
+      setResendTimer(prev => prev - 1);
+    }, 1000);
     
-    const data = await response.json();
-    
-    if (data.city && data.country_name) {
-      return `${data.city}, ${data.country_name}`;
-    }
-    return "Unknown Location";
-  } catch (error) {
-    return "Unknown Location";
-  }
-}
+    return () => clearInterval(interval);
+  }, [step, resendTimer]);
 
-// 🔥 Check if IP is blocked
-async function checkIPBlocked(ip: string, email?: string) {
-  const usersWithBlockedIP = await User.find({
-    'blockedIPs.ip': ip,
-    'blockedIPs.expiresAt': { $gt: new Date() }
-  });
+  // Step 1: Handle Credentials Submit
+  const handleCredentialsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-  if (usersWithBlockedIP.length > 0) {
-    const user = usersWithBlockedIP[0];
-    const blockedIP = user.blockedIPs?.find(
-      (blocked: any) => blocked.ip === ip && new Date(blocked.expiresAt) > new Date()
-    );
-    
-    if (blockedIP) {
-      const remainingTime = Math.ceil((new Date(blockedIP.expiresAt).getTime() - Date.now()) / 60000);
-      return {
-        blocked: true,
-        expiresAt: blockedIP.expiresAt,
-        remainingMinutes: remainingTime,
-        reason: blockedIP.reason,
-        attemptCount: blockedIP.attemptCount
-      };
-    }
-  }
-
-  return { blocked: false };
-}
-
-// 🔥 Record failed login attempt
-async function recordFailedLogin(ip: string, email: string) {
-  const user = await User.findOne({ email });
-  if (!user) return { shouldBlock: false, remainingAttempts: MAX_ATTEMPTS };
-
-  user.failedLoginAttempts = user.failedLoginAttempts || [];
-  user.blockedIPs = user.blockedIPs || [];
-
-  (user.failedLoginAttempts as any).push({
-    ip,
-    attemptTime: new Date(),
-    email
-  });
-
-  const fiveMinutesAgo = new Date(Date.now() - ATTEMPT_WINDOW);
-  user.failedLoginAttempts = user.failedLoginAttempts.filter(
-    (attempt: any) => new Date(attempt.attemptTime) > fiveMinutesAgo
-  );
-
-  const recentAttempts = user.failedLoginAttempts.filter(
-    (attempt: any) => attempt.ip === ip
-  ).length;
-
-  const remainingAttempts = MAX_ATTEMPTS - recentAttempts;
-
-  if (recentAttempts >= MAX_ATTEMPTS) {
-    user.blockedIPs = user.blockedIPs.filter((blocked: any) => blocked.ip !== ip);
-
-    const expiresAt = new Date(Date.now() + BLOCK_DURATION);
-    (user.blockedIPs as any).push({
-      ip,
-      blockedAt: new Date(),
-      expiresAt,
-      reason: `Too many failed admin login attempts (${recentAttempts} attempts)`,
-      attemptCount: recentAttempts
-    });
-
-    await user.save();
-
-    return {
-      shouldBlock: true,
-      remainingAttempts: 0,
-      expiresAt,
-      remainingMinutes: Math.ceil(BLOCK_DURATION / 60000),
-      attemptCount: recentAttempts
-    };
-  }
-
-  await user.save();
-
-  return {
-    shouldBlock: false,
-    remainingAttempts,
-    recentAttempts
-  };
-}
-
-// 🔥 Clear failed attempts on successful login
-async function clearFailedAttempts(email: string) {
-  const user = await User.findOne({ email });
-  if (!user) return;
-
-  user.failedLoginAttempts = [];
-  await user.save();
-}
-
-// 🔥 Send OTP Email
-async function sendOTPEmail(email: string, name: string, otp: string) {
-  try {
-    await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/admin/auth/send-otp-email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name, otp })
-    });
-  } catch (error) {
-    console.error("Failed to send OTP email:", error);
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    await connectDB();
-
-    const { email, password } = await req.json();
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { success: false, message: "Email & password required" },
-        { status: 400 }
-      );
-    }
-
-    // 🔧 GET CLIENT INFO
-    const clientIP = await getClientIP();
-    const userAgent = req.headers.get('user-agent') || 'Unknown';
-    const { device, browser, os } = parseUserAgent(userAgent);
-
-    console.log(`🔐 Admin login attempt: ${email} from ${clientIP}`);
-    console.log(`📱 Device: ${device} | Browser: ${browser} | OS: ${os}`);
-
-    // 🔥 CHECK IF IP IS BLOCKED
-    const blockStatus = await checkIPBlocked(clientIP, email);
-    
-    if (blockStatus.blocked) {
-      return NextResponse.json(
-        {
-          success: false,
-          blocked: true,
-          ipBlocked: true,
-          remainingMinutes: blockStatus.remainingMinutes,
-          expiresAt: blockStatus.expiresAt,
-          message: `Too many failed attempts. Your IP is blocked for ${blockStatus.remainingMinutes} minutes.`,
-          attemptCount: blockStatus.attemptCount,
-          reason: blockStatus.reason
-        },
-        { status: 403 }
-      );
-    }
-
-    // 🔥 FIND ADMIN USER
-    const user = await User.findOne({ email }).select("+password") as IUser;
-
-    if (!user) {
-      const failResult = await recordFailedLogin(clientIP, email);
-      
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid email or password",
-          remainingAttempts: failResult.remainingAttempts,
-          recentAttempts: failResult.recentAttempts,
-          blocked: failResult.shouldBlock,
-          ...(failResult.shouldBlock && {
-            ipBlocked: true,
-            expiresAt: failResult.expiresAt,
-            remainingMinutes: failResult.remainingMinutes,
-            message: `Too many failed attempts. Your IP is blocked for ${failResult.remainingMinutes} minutes.`
-          })
-        },
-        { status: failResult.shouldBlock ? 403 : 401 }
-      );
-    }
-
-    // 🔥 CHECK ADMIN ROLE
-    if (!user.isAdmin) {
-      const failResult = await recordFailedLogin(clientIP, email);
-      
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Admin access only. This portal is restricted to administrators.",
-          remainingAttempts: failResult.remainingAttempts,
-          blocked: failResult.shouldBlock
-        },
-        { status: 403 }
-      );
-    }
-
-    // 🔥 CHECK IF BANNED
-    if (user.isBanned) {
-      return NextResponse.json(
-        {
-          success: false,
-          banned: true,
-          message: "This admin account has been suspended.",
-          reason: user.banReason || "Account banned",
-        },
-        { status: 403 }
-      );
-    }
-
-    // 🔥 CHECK PASSWORD EXISTS
-    if (!user.password) {
-      return NextResponse.json(
-        { success: false, message: "Password missing in user record" },
-        { status: 500 }
-      );
-    }
-
-    // 🔥 VERIFY PASSWORD
-    const valid = await bcrypt.compare(password, user.password);
-    
-    if (!valid) {
-      const failResult = await recordFailedLogin(clientIP, email);
-      
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid email or password",
-          remainingAttempts: failResult.remainingAttempts,
-          recentAttempts: failResult.recentAttempts,
-          blocked: failResult.shouldBlock,
-          ...(failResult.shouldBlock && {
-            ipBlocked: true,
-            expiresAt: failResult.expiresAt,
-            remainingMinutes: failResult.remainingMinutes,
-            message: `Too many failed attempts. Your IP is blocked for ${failResult.remainingMinutes} minutes.`
-          })
-        },
-        { status: failResult.shouldBlock ? 403 : 401 }
-      );
-    }
-
-    // 🎉 PASSWORD VALID - NOW HANDLE LOGIN TRACKING
-
-    // 🔧 GET LOCATION
-    let location = "Unknown Location";
     try {
-      location = await getLocationFromIP(clientIP);
+      const res = await fetch("/api/admin/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Login failed");
+        setLoading(false);
+        return;
+      }
+
+      if (data.requiresOTP) {
+        // Move to OTP step
+        setTempToken(data.tempToken);
+        setOtpSentTo(data.email);
+        setStep("otp");
+        setSuccess("OTP has been sent to your email!");
+        setResendTimer(60);
+      } else {
+        // Direct login (shouldn't happen for admin)
+        router.push("/admin");
+      }
+
+      setLoading(false);
     } catch (error) {
-      console.log("⚠️ Could not get location");
+      console.error("Login error:", error);
+      setError("Server error. Please try again.");
+      setLoading(false);
     }
+  };
 
-    // ✅ UPDATE USER WITH LOGIN TRACKING
-    user.lastLogin = new Date();
-    user.ipAddress = clientIP;
-    user.currentLocation = location;
-
-    // ✅ SAVE TO LOGIN HISTORY
-    if (!user.loginHistory) {
-      user.loginHistory = [];
-    }
-
-    user.loginHistory.push({
-      ip: clientIP,
-      location: location,
-      device: device,
-      browser: browser,
-      os: os,
-      timestamp: new Date(),
-      suspicious: false
-    });
-
-    // Keep only last 50 records
-    if (user.loginHistory.length > 50) {
-      user.loginHistory = user.loginHistory.slice(-50);
-    }
-
-    // ✅ UPDATE LOGIN IPs
-    if (!user.loginIPs) {
-      user.loginIPs = [];
-    }
-
-    const existingIP = user.loginIPs.find(item => item.ip === clientIP);
-    if (existingIP) {
-      existingIP.lastLogin = new Date();
-      existingIP.count += 1;
-    } else {
-      user.loginIPs.push({
-        ip: clientIP,
-        lastLogin: new Date(),
-        count: 1
-      });
-    }
-
-    // ✅ UPDATE LOGIN STATS
-    if (!user.loginStats) {
-      user.loginStats = {
-        totalLogins: 0,
-        failedAttempts: 0,
-        uniqueDevices: 0,
-        uniqueLocations: 0
-      };
-    }
+  // Step 2: Handle OTP Input
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // Only digits
     
-    user.loginStats.totalLogins += 1;
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1); // Only last digit
+    setOtp(newOtp);
 
-    // 🎉 Generate OTP
-    const otp = crypto.randomInt(100000, 999999).toString();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    // Auto-focus next input
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      nextInput?.focus();
+    }
+  };
 
-    console.log('\n' + '═'.repeat(60));
-    console.log('🔐 GENERATING ADMIN OTP');
-    console.log('═'.repeat(60));
-    console.log(`📧 Email: ${user.email}`);
-    console.log(`🔢 OTP Code: ${otp}`);
-    console.log(`⏰ Expires: ${otpExpires.toLocaleString()}`);
-    console.log('═'.repeat(60) + '\n');
-
-    // 🔥 SAVE OTP
-    user.adminOTP = otp;
-    user.adminOTPExpires = otpExpires;
-
-    // ✅ SAVE ALL UPDATES TO USER
-    await user.save();
-
-    console.log(`✅ Login history saved for ${email}`);
-    console.log(`📊 Total logins: ${user.loginStats.totalLogins}`);
-
-    // Generate temporary token
-    const tempToken = jwt.sign(
-      {
-        id: user._id?.toString() || String(user._id),
-        email: user.email,
-        temp: true,
-        purpose: "admin-otp-verification"
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: "15m" }
-    );
-
-    // Send OTP via email
-    await sendOTPEmail(user.email, user.name, otp);
-
-    // 📧 SEND LOGIN NOTIFICATION EMAIL
-    try {
-      await sendLoginNotification({
-        email: user.email,
-        userName: user.name || user.email.split('@')[0],
-        ipAddress: clientIP,
-        userAgent: userAgent,
-        location: location,
-        timestamp: new Date(),
-        loginMethod: 'manual',
-      });
-      console.log('✅ Login notification email sent');
-    } catch (emailError) {
-      console.error('⚠️ Failed to send login notification:', emailError);
+  // Handle OTP Submit
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const otpCode = otp.join("");
+    if (otpCode.length !== 6) {
+      setError("Please enter complete 6-digit OTP");
+      return;
     }
 
-    // 🔥 SUCCESSFUL CREDENTIALS - CLEAR FAILED ATTEMPTS
-    await clearFailedAttempts(email);
+    setError("");
+    setLoading(true);
 
-    return NextResponse.json({
-      success: true,
-      requiresOTP: true,
-      message: "Verification code sent to your email",
-      tempToken,
-      email: user.email,
-      expiresIn: 600
-    });
+    try {
+      const res = await fetch("/api/admin/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          tempToken,
+          otp: otpCode,
+        }),
+      });
 
-  } catch (err: any) {
-    console.error("❌ ADMIN LOGIN ERROR:", err);
-    return NextResponse.json(
-      { success: false, message: "Server error", error: err.message },
-      { status: 500 }
-    );
-  }
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Invalid OTP");
+        setLoading(false);
+        return;
+      }
+
+      setSuccess("Login successful! Redirecting...");
+      setTimeout(() => {
+        router.push("/admin");
+      }, 1000);
+
+    } catch (error) {
+      console.error("OTP verification error:", error);
+      setError("Server error. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  // Resend OTP
+  const handleResendOtp = async () => {
+    if (resendTimer > 0) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/admin/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tempToken }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSuccess("New OTP sent to your email!");
+        setResendTimer(60);
+        setOtp(["", "", "", "", "", ""]);
+      } else {
+        setError(data.message || "Failed to resend OTP");
+      }
+    } catch (error) {
+      setError("Server error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!mounted) return null;
+
+  return (
+    <div className={dark ? "dark" : ""}>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+        
+        {/* Background Effects */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute w-96 h-96 bg-purple-500/20 rounded-full blur-3xl -top-48 -left-48 animate-pulse"></div>
+          <div className="absolute w-96 h-96 bg-blue-500/20 rounded-full blur-3xl -bottom-48 -right-48 animate-pulse delay-700"></div>
+        </div>
+
+        {/* Login Card */}
+        <div className="relative bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl shadow-2xl rounded-3xl p-10 w-full max-w-md border border-slate-200/50 dark:border-slate-700/50">
+          
+          <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 rounded-3xl blur-lg opacity-20 animate-pulse"></div>
+
+          <div className="relative z-10">
+            {/* Logo */}
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center shadow-lg">
+                <span className="text-4xl">🔐</span>
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                Admin Portal
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {step === "credentials" ? "Secure authentication required" : "Enter verification code"}
+              </p>
+            </div>
+
+            {/* Step Indicator */}
+            <div className="flex items-center justify-center mb-8 gap-2">
+              <div className={`flex items-center gap-2 ${step === "credentials" ? "text-purple-600" : "text-green-500"}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  step === "credentials" ? "bg-purple-600 text-white" : "bg-green-500 text-white"
+                }`}>
+                  {step === "otp" ? "✓" : "1"}
+                </div>
+                <span className="text-xs font-semibold">Credentials</span>
+              </div>
+              <div className="w-12 h-0.5 bg-gray-300 dark:bg-gray-700"></div>
+              <div className={`flex items-center gap-2 ${step === "otp" ? "text-purple-600" : "text-gray-400"}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  step === "otp" ? "bg-purple-600 text-white" : "bg-gray-300 dark:bg-gray-700 text-gray-600"
+                }`}>
+                  2
+                </div>
+                <span className="text-xs font-semibold">Verification</span>
+              </div>
+            </div>
+
+            {/* STEP 1: Credentials Form */}
+            {step === "credentials" && (
+              <form onSubmit={handleCredentialsSubmit} className="space-y-5">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
+                    Admin Email
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="Enter admin email"
+                    className="w-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white p-3.5 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={loading}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      className="w-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white p-3.5 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none pr-12 transition-all"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                    >
+                      {showPassword ? "👁️" : "👁️‍🗨️"}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl text-sm">
+                    ⚠️ {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white p-3.5 rounded-xl font-bold shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                >
+                  {loading ? "Verifying..." : "Continue to Verification"}
+                </button>
+              </form>
+            )}
+
+            {/* STEP 2: OTP Form */}
+            {step === "otp" && (
+              <form onSubmit={handleOtpSubmit} className="space-y-5">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
+                  <p className="text-sm text-blue-800 dark:text-blue-300 text-center">
+                    📧 Verification code sent to:<br />
+                    <span className="font-bold">{otpSentTo}</span>
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 block text-center">
+                    Enter 6-Digit Verification Code
+                  </label>
+                  <div className="flex gap-2 justify-center">
+                    {otp.map((digit, index) => (
+                      <input
+                        key={index}
+                        id={`otp-${index}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Backspace" && !digit && index > 0) {
+                            document.getElementById(`otp-${index - 1}`)?.focus();
+                          }
+                        }}
+                        className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
+                        disabled={loading}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {success && (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-xl text-sm text-center">
+                    ✓ {success}
+                  </div>
+                )}
+
+                {error && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl text-sm text-center">
+                    ⚠️ {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || otp.join("").length !== 6}
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white p-3.5 rounded-xl font-bold shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                >
+                  {loading ? "Verifying..." : "Verify & Login"}
+                </button>
+
+                {/* Resend OTP */}
+                <div className="text-center">
+                  {resendTimer > 0 ? (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Resend code in <span className="font-bold text-purple-600">{resendTimer}s</span>
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={loading}
+                      className="text-sm text-purple-600 dark:text-purple-400 font-semibold hover:underline"
+                    >
+                      Resend Verification Code
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("credentials");
+                    setOtp(["", "", "", "", "", ""]);
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className="w-full text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+                >
+                  ← Back to login
+                </button>
+              </form>
+            )}
+
+            {/* Footer */}
+            <div className="mt-6 text-center">
+              <Link
+                href="/auth/login"
+                className="text-xs text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400"
+              >
+                ← Back to User Login
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
