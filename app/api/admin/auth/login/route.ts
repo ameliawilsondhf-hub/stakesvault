@@ -5,8 +5,11 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { getClientIP } from "@/lib/security";
+import { sendLoginNotification } from "@/lib/email/loginNotification"; // 📧 NEW IMPORT
+
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
 // 🔥 IP BLOCKING CONFIGURATION
 const MAX_ATTEMPTS = 5;
 const BLOCK_DURATION = 60 * 60 * 1000; // 60 minutes
@@ -139,6 +142,9 @@ export async function POST(req: Request) {
     // 🔥 GET CLIENT IP
     const clientIP = await getClientIP();
 
+    // 📧 GET USER AGENT FOR EMAIL NOTIFICATION
+    const userAgent = req.headers.get('user-agent') || 'Unknown';
+
     // 🔥 CHECK IF IP IS BLOCKED
     const blockStatus = await checkIPBlocked(clientIP, email);
     
@@ -245,75 +251,88 @@ export async function POST(req: Request) {
     // 🎉 PASSWORD VALID - NOW SEND OTP
 
     // Generate 6-digit OTP
-  // 🎉 PASSWORD VALID - NOW SEND OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-// Generate 6-digit OTP
-const otp = crypto.randomInt(100000, 999999).toString();
-const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    console.log('\n' + '═'.repeat(60));
+    console.log('🔐 GENERATING ADMIN OTP');
+    console.log('═'.repeat(60));
+    console.log(`📧 Email: ${user.email}`);
+    console.log(`🔢 OTP Code: ${otp}`);
+    console.log(`⏰ Expires: ${otpExpires.toLocaleString()}`);
+    console.log('═'.repeat(60) + '\n');
 
-console.log('\n' + '═'.repeat(60));
-console.log('🔐 GENERATING ADMIN OTP');
-console.log('═'.repeat(60));
-console.log(`📧 Email: ${user.email}`);
-console.log(`🔢 OTP Code: ${otp}`);
-console.log(`⏰ Expires: ${otpExpires.toLocaleString()}`);
-console.log('═'.repeat(60) + '\n');
-
-// 🔥 IMPORTANT: Save OTP to user document
-try {
-  // Update user with OTP
-  await User.updateOne(
-    { _id: user._id },
-    { 
-      $set: { 
-        adminOTP: otp,
-        adminOTPExpires: otpExpires,
-        lastLogin: new Date()
-      } 
+    // 🔥 IMPORTANT: Save OTP to user document
+    try {
+      // Update user with OTP
+      await User.updateOne(
+        { _id: user._id },
+        { 
+          $set: { 
+            adminOTP: otp,
+            adminOTPExpires: otpExpires,
+            lastLogin: new Date()
+          } 
+        }
+      );
+      
+      console.log("✅ OTP saved to database");
+      
+      // Verify it was saved
+      const checkUser = await User.findById(user._id).select("+adminOTP +adminOTPExpires");
+      console.log("✅ Verification - OTP in DB:", checkUser?.adminOTP);
+      console.log("✅ Verification - Expires:", checkUser?.adminOTPExpires);
+      
+    } catch (saveError) {
+      console.error("❌ Failed to save OTP:", saveError);
+      return NextResponse.json(
+        { success: false, message: "Failed to generate verification code" },
+        { status: 500 }
+      );
     }
-  );
-  
-  console.log("✅ OTP saved to database");
-  
-  // Verify it was saved
-  const checkUser = await User.findById(user._id).select("+adminOTP +adminOTPExpires");
-  console.log("✅ Verification - OTP in DB:", checkUser?.adminOTP);
-  console.log("✅ Verification - Expires:", checkUser?.adminOTPExpires);
-  
-} catch (saveError) {
-  console.error("❌ Failed to save OTP:", saveError);
-  return NextResponse.json(
-    { success: false, message: "Failed to generate verification code" },
-    { status: 500 }
-  );
-}
 
-// Generate temporary token (15 minutes - for OTP verification)
-const tempToken = jwt.sign(
-  {
-    id: user._id?.toString() || String(user._id),
-    email: user.email,
-    temp: true,
-    purpose: "admin-otp-verification"
-  },
-  process.env.JWT_SECRET!,
-  { expiresIn: "15m" }
-);
+    // Generate temporary token (15 minutes - for OTP verification)
+    const tempToken = jwt.sign(
+      {
+        id: user._id?.toString() || String(user._id),
+        email: user.email,
+        temp: true,
+        purpose: "admin-otp-verification"
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "15m" }
+    );
 
-// Send OTP via email
-await sendOTPEmail(user.email, user.name, otp);
+    // Send OTP via email
+    await sendOTPEmail(user.email, user.name, otp);
 
-// 🔥 SUCCESSFUL CREDENTIALS - CLEAR FAILED ATTEMPTS
-await clearFailedAttempts(email);
+    // 📧 ✅ SEND LOGIN NOTIFICATION EMAIL (NEW!)
+    try {
+      await sendLoginNotification({
+        email: user.email,
+        userName: user.name || user.email.split('@')[0],
+        ipAddress: clientIP,
+        userAgent: userAgent,
+        timestamp: new Date(),
+        loginMethod: 'manual', // This is manual/password login
+      });
+      console.log('✅ Login notification email sent');
+    } catch (emailError) {
+      // Don't fail the login if email fails
+      console.error('⚠️ Failed to send login notification:', emailError);
+    }
 
-return NextResponse.json({
-  success: true,
-  requiresOTP: true,
-  message: "Verification code sent to your email",
-  tempToken,
-  email: user.email,
-  expiresIn: 600 // 10 minutes in seconds
-});
+    // 🔥 SUCCESSFUL CREDENTIALS - CLEAR FAILED ATTEMPTS
+    await clearFailedAttempts(email);
+
+    return NextResponse.json({
+      success: true,
+      requiresOTP: true,
+      message: "Verification code sent to your email",
+      tempToken,
+      email: user.email,
+      expiresIn: 600 // 10 minutes in seconds
+    });
 
   } catch (err: any) {
     console.error("❌ ADMIN LOGIN ERROR:", err);

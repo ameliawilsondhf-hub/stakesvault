@@ -1,31 +1,97 @@
+// ===================================================================
+// 🔧 FIXED USER LOGIN ROUTE WITH COMPLETE TRACKING
+// File: app/api/auth/login/route.ts
+// ===================================================================
+
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { headers } from "next/headers";
+import { sendLoginNotification } from "@/lib/email/loginNotification";
 
 // 🔥 IP BLOCKING SYSTEM - In-Memory Storage
 const blockedIPs = new Map<string, { until: Date; attempts: number }>();
 const failedAttempts = new Map<string, { count: number; firstAttempt: Date; attempts: Date[] }>();
 
-// Get client IP
+// 🔧 Get client IP - IMPROVED VERSION
 async function getClientIP(): Promise<string> {
   try {
     const headersList = await headers();
     const forwarded = headersList.get("x-forwarded-for");
     const realIP = headersList.get("x-real-ip");
+    const cfIP = headersList.get("cf-connecting-ip");
     
     if (forwarded) {
-      return forwarded.split(",")[0].trim();
+      const ips = forwarded.split(",").map(ip => ip.trim());
+      return ips[0]; // Return first IP (original client)
     }
-    if (realIP) {
-      return realIP;
-    }
+    if (realIP) return realIP;
+    if (cfIP) return cfIP;
+    
     return "unknown";
   } catch (error) {
     console.log("⚠️ Could not get client IP");
     return "unknown";
+  }
+}
+
+// 🔧 Parse User Agent - IMPROVED VERSION
+function parseUserAgent(userAgent: string) {
+  let device = "Desktop";
+  let browser = "Unknown Browser";
+  let os = "Unknown OS";
+
+  // Detect OS
+  if (userAgent.includes("Windows NT 10.0")) os = "Windows 10";
+  else if (userAgent.includes("Windows NT 6.3")) os = "Windows 8.1";
+  else if (userAgent.includes("Windows NT 6.2")) os = "Windows 8";
+  else if (userAgent.includes("Windows NT 6.1")) os = "Windows 7";
+  else if (userAgent.includes("Mac OS X")) os = "macOS";
+  else if (userAgent.includes("Android")) os = "Android";
+  else if (userAgent.includes("Linux")) os = "Linux";
+  else if (userAgent.includes("iPhone") || userAgent.includes("iPad")) os = "iOS";
+
+  // Detect Device Type
+  if (/mobile/i.test(userAgent)) {
+    device = "Mobile";
+  } else if (/tablet/i.test(userAgent)) {
+    device = "Tablet";
+  }
+
+  // Detect Browser
+  if (userAgent.includes("Edg")) browser = "Edge";
+  else if (userAgent.includes("Chrome") && !userAgent.includes("Edg")) browser = "Chrome";
+  else if (userAgent.includes("Safari") && !userAgent.includes("Chrome")) browser = "Safari";
+  else if (userAgent.includes("Firefox")) browser = "Firefox";
+  else if (userAgent.includes("Opera") || userAgent.includes("OPR")) browser = "Opera";
+
+  return { device, browser, os };
+}
+
+// 🌍 Get Location from IP (Optional - Free API)
+async function getLocationFromIP(ip: string): Promise<string> {
+  try {
+    if (ip === "unknown" || ip === "::1" || ip === "127.0.0.1") {
+      return "Local Network";
+    }
+
+    const response = await fetch(`https://ipapi.co/${ip}/json/`, {
+      headers: { 'User-Agent': 'StakeVault/1.0' },
+      signal: AbortSignal.timeout(3000) // 3 second timeout
+    });
+    
+    if (!response.ok) return "Unknown Location";
+    
+    const data = await response.json();
+    
+    if (data.city && data.country_name) {
+      return `${data.city}, ${data.country_name}`;
+    }
+    return "Unknown Location";
+  } catch (error) {
+    return "Unknown Location";
   }
 }
 
@@ -61,13 +127,11 @@ function trackFailedAttempt(ip: string): { shouldBlock: boolean; attemptsRemaini
     return { shouldBlock: false, attemptsRemaining: 4 };
   }
 
-  // Filter attempts within last 5 minutes
   record.attempts = record.attempts.filter(attempt => attempt > fiveMinutesAgo);
   record.attempts.push(now);
   record.count = record.attempts.length;
 
   if (record.count >= 5) {
-    // Block for 60 minutes
     const blockUntil = new Date(now.getTime() + 60 * 60 * 1000);
     blockedIPs.set(ip, { until: blockUntil, attempts: record.count });
     
@@ -93,9 +157,14 @@ export async function POST(req: Request) {
     await connectDB();
 
     const { email, password } = await req.json();
+    
+    // 🔧 GET CLIENT INFO
     const clientIP = await getClientIP();
+    const userAgent = req.headers.get('user-agent') || 'Unknown';
+    const { device, browser, os } = parseUserAgent(userAgent);
 
     console.log(`🔐 Authentication attempt: ${email} from ${clientIP}`);
+    console.log(`📱 Device: ${device} | Browser: ${browser} | OS: ${os}`);
 
     // Validation
     if (!email || !password) {
@@ -227,22 +296,57 @@ export async function POST(req: Request) {
       });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        id: user._id.toString(), 
-        email: user.email,
-        role: user.isAdmin ? "admin" : "user"
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" }
-    );
+    // 🔧 GET LOCATION (async, don't block login)
+    let location = "Unknown Location";
+    try {
+      location = await getLocationFromIP(clientIP);
+    } catch (error) {
+      console.log("⚠️ Could not get location");
+    }
 
-    // Update user login info
+    // 🔧 UPDATE USER WITH COMPLETE LOGIN TRACKING
     user.lastLogin = new Date();
     user.ipAddress = clientIP;
+    user.currentLocation = location;
 
-    // Reset failed attempts and update stats
+    // ✅ SAVE TO LOGIN HISTORY
+    if (!user.loginHistory) {
+      user.loginHistory = [];
+    }
+
+    user.loginHistory.push({
+      ip: clientIP,
+      location: location,
+      device: device,
+      browser: browser,
+      os: os,
+      timestamp: new Date(),
+      suspicious: false
+    });
+
+    // Keep only last 50 login records
+    if (user.loginHistory.length > 50) {
+      user.loginHistory = user.loginHistory.slice(-50);
+    }
+
+    // ✅ UPDATE LOGIN IPs
+    if (!user.loginIPs) {
+      user.loginIPs = [];
+    }
+
+    const existingIP = user.loginIPs.find(item => item.ip === clientIP);
+    if (existingIP) {
+      existingIP.lastLogin = new Date();
+      existingIP.count += 1;
+    } else {
+      user.loginIPs.push({
+        ip: clientIP,
+        lastLogin: new Date(),
+        count: 1
+      });
+    }
+
+    // ✅ UPDATE LOGIN STATS
     if (!user.loginStats) {
       user.loginStats = {
         totalLogins: 0,
@@ -255,7 +359,38 @@ export async function POST(req: Request) {
     user.loginStats.failedAttempts = 0;
     user.loginStats.totalLogins += 1;
 
+    // ✅ SAVE USER WITH ALL UPDATES
     await user.save();
+
+    console.log(`✅ Login history saved for ${email}`);
+    console.log(`📊 Total logins: ${user.loginStats.totalLogins}`);
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: user._id.toString(), 
+        email: user.email,
+        role: user.isAdmin ? "admin" : "user"
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "7d" }
+    );
+
+    // 📧 SEND LOGIN NOTIFICATION EMAIL
+    try {
+      await sendLoginNotification({
+        email: user.email,
+        userName: user.name || user.email.split('@')[0],
+        ipAddress: clientIP,
+        userAgent: userAgent,
+        location: location,
+        timestamp: new Date(),
+        loginMethod: 'manual',
+      });
+      console.log(`✅ Login notification email sent to ${user.email}`);
+    } catch (emailError) {
+      console.error('⚠️ Failed to send login notification:', emailError);
+    }
 
     console.log(`✅ Authentication successful: ${email} from ${clientIP}`);
 
@@ -264,7 +399,7 @@ export async function POST(req: Request) {
       success: true,
       message: "Login successful. Welcome back!",
       userId: user._id.toString(),
-      attemptsRemaining: 5, // Reset to 5
+      attemptsRemaining: 5,
       user: {
         id: user._id.toString(),
         email: user.email,
