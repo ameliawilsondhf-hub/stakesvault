@@ -14,7 +14,7 @@ export async function sendPasswordResetEmail(
 
   try {
     const { data, error } = await resend.emails.send({
-      from: 'StakeVault <noreply@stakesvault.com>',
+      from: 'StakeVault  <support@stakesvault.com>',
       to: [email],
       subject: "🔒 Password Reset Request - StakeVault",
       html: `
