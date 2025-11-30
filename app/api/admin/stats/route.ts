@@ -186,15 +186,19 @@ export async function GET() {
       totalLevel: 0
     };
 
-    const deposits = {
-      approved: depositStats[0].approved[0] || { total: 0, count: 0, todayTotal: 0 },
-      pending: depositStats[0].pending[0]?.count || 0
-    };
+   const depositFacet = depositStats?.[0] || { approved: [], pending: [] };
 
-    const withdrawals = {
-      approved: withdrawalStats[0].approved[0] || { total: 0, count: 0, todayTotal: 0 },
-      pending: withdrawalStats[0].pending[0]?.count || 0
-    };
+const deposits = {
+  approved: depositFacet.approved?.[0] || { total: 0, count: 0, todayTotal: 0 },
+  pending: depositFacet.pending?.[0]?.count || 0
+};
+
+  const withdrawalFacet = withdrawalStats?.[0] || { approved: [], pending: [] };
+
+const withdrawals = {
+  approved: withdrawalFacet.approved?.[0] || { total: 0, count: 0, todayTotal: 0 },
+  pending: withdrawalFacet.pending?.[0]?.count || 0
+};
 
     // Build daily history
     const [depositsByDay, withdrawalsByDay] = dailyStats;

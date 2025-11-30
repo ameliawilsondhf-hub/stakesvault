@@ -1,7 +1,5 @@
-// ===================================================================
-// 🔧 FIXED ADMIN LOGIN WITH COMPLETE TRACKING
-// File: app/api/admin/auth/login/route.ts
-// ===================================================================
+"use client";
+
 
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
