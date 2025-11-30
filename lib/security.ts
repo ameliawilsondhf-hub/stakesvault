@@ -1,26 +1,37 @@
 import { headers } from 'next/headers';
 
-// 🔍 Get Client IP Address
+// 🔍 Get Client IP Address (Enhanced for Vercel)
 export async function getClientIP(): Promise<string> {
   try {
     const headersList = await headers();
     
-    // Try multiple headers in order of preference
-    const forwarded = headersList.get('x-forwarded-for');
-    const real = headersList.get('x-real-ip');
-    const cfConnecting = headersList.get('cf-connecting-ip'); // Cloudflare
-    
-    if (forwarded) {
-      // x-forwarded-for can contain multiple IPs, get the first one
-      return forwarded.split(',')[0].trim();
-    }
-    
-    if (real) {
-      return real;
-    }
-    
-    if (cfConnecting) {
-      return cfConnecting;
+    // Priority order for IP detection (Vercel-optimized)
+    const possibleHeaders = [
+      'x-real-ip',
+      'x-forwarded-for',
+      'x-vercel-forwarded-for',      // ✅ Vercel specific
+      'x-vercel-proxied-for',         // ✅ Vercel specific
+      'cf-connecting-ip',             // Cloudflare
+      'true-client-ip',
+      'x-client-ip',
+    ];
+
+    for (const header of possibleHeaders) {
+      const value = headersList.get(header);
+      if (value) {
+        // x-forwarded-for can be comma-separated
+        const ip = value.split(',')[0].trim();
+        
+        // Skip localhost/private IPs
+        if (ip && 
+            ip !== '::1' && 
+            ip !== '127.0.0.1' && 
+            !ip.startsWith('192.168.') && 
+            !ip.startsWith('10.')) {
+          console.log(`✅ IP detected from ${header}:`, ip);
+          return ip;
+        }
+      }
     }
     
     return '0.0.0.0'; // Fallback
@@ -30,28 +41,48 @@ export async function getClientIP(): Promise<string> {
   }
 }
 
-// 🌍 Get Location from IP
+// 🌍 Get Location from IP (Free API - ipapi.co)
 export async function getLocationFromIP(ip: string): Promise<string> {
   try {
     // Skip for localhost/private IPs
-    if (ip === '0.0.0.0' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+    if (ip === '0.0.0.0' || 
+        ip === '127.0.0.1' || 
+        ip === '::1' ||
+        ip.startsWith('192.168.') || 
+        ip.startsWith('10.')) {
       return 'Local Network';
     }
 
-    // Using ip-api.com (Free, 45 requests per minute)
-    const response = await fetch(`http://ip-api.com/json/${ip}?fields=city,country,status`, {
-      next: { revalidate: 3600 } // Cache for 1 hour
+    // Using ipapi.co (free tier: 1000 requests/day, no API key)
+    const response = await fetch(`https://ipapi.co/${ip}/json/`, {
+      headers: {
+        'User-Agent': 'StakeVault-App/1.0'
+      },
+      next: { revalidate: 3600 }, // Cache for 1 hour
+      signal: AbortSignal.timeout(5000) // 5 second timeout
     });
     
+    if (!response.ok) {
+      console.warn(`IP API returned ${response.status} for ${ip}`);
+      return 'Unknown Location';
+    }
+
     const data = await response.json();
     
-    if (data.status === 'success') {
-      return `${data.city}, ${data.country}`;
+    if (data.error) {
+      console.warn('IP API error:', data.reason);
+      return 'Unknown Location';
     }
     
-    return 'Unknown Location';
-  } catch (error) {
-    console.error('Error getting location:', error);
+    // Format: "City, Country"
+    const city = data.city || 'Unknown City';
+    const country = data.country_name || 'Unknown Country';
+    
+    console.log(`✅ Location for ${ip}: ${city}, ${country}`);
+    return `${city}, ${country}`;
+    
+  } catch (error: any) {
+    console.error('Error getting location:', error.message);
     return 'Unknown Location';
   }
 }
@@ -68,10 +99,10 @@ export async function getDeviceInfo(userAgent?: string): Promise<{
 
     // Detect Browser
     let browser = 'Unknown Browser';
-    if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+    if (ua.includes('Edg')) browser = 'Edge';
+    else if (ua.includes('Chrome')) browser = 'Chrome';
     else if (ua.includes('Firefox')) browser = 'Firefox';
     else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
-    else if (ua.includes('Edg')) browser = 'Edge';
     else if (ua.includes('Opera') || ua.includes('OPR')) browser = 'Opera';
 
     // Detect OS
@@ -86,7 +117,6 @@ export async function getDeviceInfo(userAgent?: string): Promise<{
     else if (ua.includes('Android')) os = 'Android';
     else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
 
-    // Device name
     const device = `${os} ${browser}`;
 
     return { device, browser, os };
@@ -102,14 +132,13 @@ export async function getDeviceInfo(userAgent?: string): Promise<{
 
 // 🔐 Generate Device Fingerprint
 export function generateDeviceFingerprint(ip: string, userAgent: string): string {
-  // Simple hash function for device fingerprint
   const str = `${ip}-${userAgent}`;
   let hash = 0;
   
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & hash;
   }
   
   return `device_${Math.abs(hash).toString(36)}`;
@@ -137,9 +166,8 @@ export function isSuspiciousLogin(params: {
     severity = 'low';
   }
 
-  // Check 2: Location changed significantly
+  // Check 2: Location changed
   if (params.previousLocation && params.currentLocation !== params.previousLocation) {
-    // Extract countries
     const prevCountry = params.previousLocation.split(',')[1]?.trim();
     const currCountry = params.currentLocation.split(',')[1]?.trim();
     
@@ -149,7 +177,7 @@ export function isSuspiciousLogin(params: {
     }
   }
 
-  // Check 3: Multiple devices in short time (last 5 minutes)
+  // Check 3: Multiple devices
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
   const recentLogins = params.loginHistory.filter(
     login => new Date(login.timestamp) > fiveMinutesAgo
@@ -163,18 +191,7 @@ export function isSuspiciousLogin(params: {
     }
   }
 
-  // Check 4: New device (not in trusted devices)
-  const { device, browser, os } = params.devices[0] || {};
-  const isKnownDevice = params.devices.some(d => 
-    d.browser === browser && d.os === os && d.trusted
-  );
-  
-  if (!isKnownDevice && params.devices.length > 0) {
-    reasons.push('New device detected');
-    if (severity === 'low') severity = 'medium';
-  }
-
-  // Check 5: Too many logins (potential brute force)
+  // Check 4: Too many logins
   const lastHour = new Date(Date.now() - 60 * 60 * 1000);
   const loginsLastHour = params.loginHistory.filter(
     login => new Date(login.timestamp) > lastHour
