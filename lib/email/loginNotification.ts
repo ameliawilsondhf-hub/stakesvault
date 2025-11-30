@@ -2,7 +2,9 @@
 // 📧 EMAIL UTILITY - lib/email/loginNotification.ts
 // ===================================================================
 
-import nodemailer from 'nodemailer';
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY || "");
 
 interface LoginEmailData {
   email: string;
@@ -14,16 +16,7 @@ interface LoginEmailData {
   loginMethod: 'manual' | 'google';
 }
 
-// ✅ Email transporter setup using YOUR Gmail credentials
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true for 465, false for 587
-  auth: {
-    user: process.env.EMAIL_USER, // ameliawilsondhf@gmail.com
-    pass: process.env.EMAIL_PASSWORD, // Your app password
-  },
-});
+
 
 // Get device info from user agent
 function parseUserAgent(userAgent: string) {
@@ -271,9 +264,10 @@ function getEmailTemplate(data: LoginEmailData): string {
       </div>
 
       <center>
-        <a href="${process.env.NEXT_PUBLIC_BASE_URL}/settings/security" class="button">
-          Secure My Account
-        </a>
+       <a href="${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/profile" class="button">
+  Secure My Account
+</a>
+
       </center>
     </div>
 
@@ -286,8 +280,9 @@ function getEmailTemplate(data: LoginEmailData): string {
         You're receiving this because login notifications are enabled for your account.
       </p>
       <p style="margin: 0;">
-        <a href="${process.env.NEXT_PUBLIC_BASE_URL}/settings">Manage Settings</a> • 
-        <a href="${process.env.NEXT_PUBLIC_BASE_URL}/support">Contact Support</a>
+       <a href="${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/profile">Manage Settings</a> • 
+<a href="mailto:support@stakevault.com">Contact Support</a>
+
       </p>
       <p style="margin: 15px 0 0 0; color: #adb5bd;">
         © ${new Date().getFullYear()} StakeVault. All rights reserved.
@@ -302,20 +297,27 @@ function getEmailTemplate(data: LoginEmailData): string {
 // Send login notification email
 export async function sendLoginNotification(data: LoginEmailData): Promise<boolean> {
   try {
-    console.log('📧 Sending login notification to:', data.email);
+    console.log("📧 Sending login notification via Resend to:", data.email);
 
-    const mailOptions = {
-      from: `"StakeVault Security" <${process.env.EMAIL_USER}>`,
-      to: data.email,
+    const html = getEmailTemplate(data);
+
+    const { data: result, error } = await resend.emails.send({
+      from: "StakeVault Security <support@stakesvault.com>", // ✅ OFFICIAL DOMAIN
+      to: [data.email],
       subject: `🔐 New Login to Your StakeVault Account - ${formatDate(data.timestamp)}`,
-      html: getEmailTemplate(data),
-    };
+      html,
+    });
 
-    await transporter.sendMail(mailOptions);
-    console.log('✅ Login notification sent successfully');
+    if (error) {
+      console.error("❌ Resend error:", error);
+      return false;
+    }
+
+    console.log("✅ Login notification sent via Resend:", result?.id);
     return true;
+
   } catch (error) {
-    console.error('❌ Failed to send login notification:', error);
+    console.error("❌ Failed to send login notification via Resend:", error);
     return false;
   }
 }
