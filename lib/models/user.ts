@@ -15,7 +15,6 @@ interface ILoginIP {
     ip: string;
     lastLogin: Date;
     count: number;
-
 }
 
 interface ILoginHistory {
@@ -87,7 +86,6 @@ interface IBlockedIP {
     expiresAt: Date;
     reason: string;
     attemptCount: number;
-    
 }
 
 // --- Main User Interface ---
@@ -162,12 +160,12 @@ export interface IUser extends Document {
     referralCount: number;
     referredUsers: Types.ObjectId[];
     // ✅ Referral Upline Link (for commission system)
-referredBy?: Types.ObjectId;
+    referredBy?: Types.ObjectId;
 
-// ✅ Level-wise Incomes (for commission tracking)
-level1Income?: number;
-level2Income?: number;
-level3Income?: number;
+    // ✅ Level-wise Incomes (for commission tracking)
+    level1Income?: number;
+    level2Income?: number;
+    level3Income?: number;
 
     // Finance/Staking
     walletBalance: number;
@@ -204,6 +202,31 @@ level3Income?: number;
 }
 
 // --- Mongoose Schema Definition ---
+
+// ✅ Fixed: SecurityLogSchema with proper type definition
+const SecurityLogSchema = new Schema<ISecurityLog>({
+    type: { type: String, required: true },
+    ip: String,
+    device: String,
+    location: String,
+    risk: Number,
+    date: { type: Date, default: Date.now }
+}, { _id: false });
+
+// ✅ Fixed: SecurityAlertSchema with proper type definition
+const SecurityAlertSchema = new Schema<ISecurityAlert>({
+    type: { 
+        type: String, 
+        enum: ['new_device', 'new_location', 'multiple_devices', 'ip_change'] 
+    },
+    message: String,
+    severity: { type: String, enum: ['low', 'medium', 'high'], default: 'low' },
+    ip: String,
+    location: String,
+    device: String,
+    timestamp: { type: Date, default: Date.now },
+    acknowledged: { type: Boolean, default: false }
+}, { _id: false });
 
 const DeviceSchema = new Schema<IDevice>({
     name: String,
@@ -262,7 +285,7 @@ const UserSchema = new Schema<IUser>(
         // 🔥 Admin OTP Fields
         adminOTP: { 
             type: String, 
-            select: false  // Hidden by default for security
+            select: false
         },
         adminOTPExpires: { 
             type: Date, 
@@ -272,7 +295,7 @@ const UserSchema = new Schema<IUser>(
         // ✅ NEW: Email OTP Fields for User Verification
         emailOTP: { 
             type: String, 
-            select: false  // Hidden by default for security
+            select: false
         },
         emailOTPExpiry: { 
             type: Date, 
@@ -285,14 +308,9 @@ const UserSchema = new Schema<IUser>(
         bannedAt: Date,
         bannedBy: { type: Schema.Types.ObjectId, ref: "User" },
 
-        securityLogs: [{
-            type: String,
-            ip: String,
-            device: String,
-            location: String,
-            risk: Number,
-            date: { type: Date, default: Date.now }
-        }],
+        // ✅ Fixed: Using SecurityLogSchema
+        securityLogs: [SecurityLogSchema],
+        
         loginIPs: [{
             ip: String,
             lastLogin: { type: Date, default: Date.now },
@@ -317,16 +335,8 @@ const UserSchema = new Schema<IUser>(
 
         devices: [DeviceSchema],
 
-        securityAlerts: [{
-            type: { type: String, enum: ['new_device', 'new_location', 'multiple_devices', 'ip_change'] },
-            message: String,
-            severity: { type: String, enum: ['low', 'medium', 'high'], default: 'low' },
-            ip: String,
-            location: String,
-            device: String,
-            timestamp: { type: Date, default: Date.now },
-            acknowledged: { type: Boolean, default: false }
-        }],
+        // ✅ Fixed: Using SecurityAlertSchema
+        securityAlerts: [SecurityAlertSchema],
 
         loginStats: {
             totalLogins: { type: Number, default: 0 },
@@ -355,13 +365,13 @@ const UserSchema = new Schema<IUser>(
         referral: String,
         referralCount: { type: Number, default: 0 },
         referredUsers: [{ type: Schema.Types.ObjectId, ref: "User" }],
-// ✅ Upline link for commission distribution
-referredBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+        // ✅ Upline link for commission distribution
+        referredBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
 
-// ✅ Level wise income tracking
-level1Income: { type: Number, default: 0 },
-level2Income: { type: Number, default: 0 },
-level3Income: { type: Number, default: 0 },
+        // ✅ Level wise income tracking
+        level1Income: { type: Number, default: 0 },
+        level2Income: { type: Number, default: 0 },
+        level3Income: { type: Number, default: 0 },
 
         walletBalance: { type: Number, default: 0 },
         balance: { type: Number, default: 0 },
