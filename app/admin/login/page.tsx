@@ -1,5 +1,7 @@
-"use client";
-
+// ===================================================================
+// 🔧 FIXED ADMIN LOGIN WITH COMPLETE TRACKING
+// File: app/api/admin/auth/login/route.ts
+// ===================================================================
 
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
@@ -19,25 +21,23 @@ const BLOCK_DURATION = 60 * 60 * 1000; // 60 minutes
 const ATTEMPT_WINDOW = 5 * 60 * 1000; // 5 minutes
 
 // 🔧 Get client IP
-async function getClientIP(): Promise<string> {
+function getClientIP(): string {
   try {
-    const headersList = await headers();
+    const headersList = headers();
     const forwarded = headersList.get("x-forwarded-for");
     const realIP = headersList.get("x-real-ip");
     const cfIP = headersList.get("cf-connecting-ip");
-    
-    if (forwarded) {
-      return forwarded.split(",")[0].trim();
-    }
+
+    if (forwarded) return forwarded.split(",")[0].trim();
     if (realIP) return realIP;
     if (cfIP) return cfIP;
-    
+
     return "unknown";
-  } catch (error) {
-    console.log("⚠️ Could not get client IP");
+  } catch {
     return "unknown";
   }
 }
+
 
 // 🔧 Parse User Agent
 function parseUserAgent(userAgent: string) {
