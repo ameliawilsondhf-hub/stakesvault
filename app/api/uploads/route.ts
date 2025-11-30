@@ -1,10 +1,17 @@
-
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET(req: Request, { params }: { params: { filename: string } }) {
   try {
+    // ✅ Add safety check for params
+    if (!params || !params.filename) {
+      return new NextResponse('Filename is required', { status: 400 });
+    }
+
     const filename = params.filename;
     const filepath = path.join(process.cwd(), 'public/uploads', filename);
     
