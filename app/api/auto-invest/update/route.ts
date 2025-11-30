@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
-import connectDB from "@/lib/db";
+import connectDB from "@/lib/mongodb";
 import User, { IUser } from "@/lib/models/user"; // ✅ IUser import kiya for typing
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
         await connectDB();
 
         // Get JWT token
-        const cookieStore = await cookies();
+const cookieStore = cookies();
         const token = cookieStore.get("token")?.value;
 
         if (!token) {

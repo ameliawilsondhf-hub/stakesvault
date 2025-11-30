@@ -48,9 +48,17 @@ export async function GET(request: Request) {
     }
 
     // ✅ Fetch user profile (don't exclude password field yet)
-    const user = await User.findById(userId)
-      .select('-level1 -level2 -level3')
-      .lean();
+const user = await User.findById(userId)
+  .select(`
+    -password 
+    -level1 
+    -level2 
+    -level3
+    +twoFactorEnabled
+    +twoFactorVerified
+  `)
+  .lean();
+
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
