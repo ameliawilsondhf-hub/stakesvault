@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import User, { IUser } from "@/lib/models/user"; // ✅ IUser import kiya for typing
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 // APY calculator
 function calculateAPY(lockPeriod: number): number {
     const apy = (Math.pow(1.01, lockPeriod) - 1) * 100;

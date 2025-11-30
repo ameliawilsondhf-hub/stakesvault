@@ -5,7 +5,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { getClientIP } from "@/lib/security";
-
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 // 🔥 IP BLOCKING CONFIGURATION
 const MAX_ATTEMPTS = 5;
 const BLOCK_DURATION = 60 * 60 * 1000; // 60 minutes

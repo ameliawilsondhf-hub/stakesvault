@@ -3,6 +3,9 @@ import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import jwt from "jsonwebtoken";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET(req: Request) {
   try {
     await connectDB();
