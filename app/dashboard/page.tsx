@@ -92,7 +92,6 @@ const DashboardPage: FC = () => {
   });
 
   // UI states
-  const [dark, setDark] = useState<boolean>(false);
   const [moreOpen, setMoreOpen] = useState<boolean>(false);
   const [activeLevel, setActiveLevel] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -107,23 +106,6 @@ const DashboardPage: FC = () => {
       : data.level3;
   }, [activeLevel, data.level1, data.level2, data.level3]);
 
-
-  useEffect(() => {
-    // Check if window is defined before accessing it
-    if (typeof window !== "undefined") {
-      const isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      setDark(isDarkMode);
-
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const handleChange = (e: MediaQueryListEvent) => setDark(e.matches);
-
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
-    }
-    return () => {};
-  }, []);
-
-  const toggleDark = () => setDark(!dark);
 
   // Check authentication
   useEffect(() => {
@@ -204,31 +186,32 @@ void loadData();    }
   }, [activeLevel]);
 
   const logout = async () => {
-    try {
-      console.log("🚪 Logging out...");
+  try {
+    console.log("🚪 Logging out...");
 
-      if (session) {
-        await signOut({ redirect: false });
-      }
-
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-
-      localStorage.removeItem("userId");
-      // Use window.location.href to ensure full page reload and state reset
-      if (typeof window !== 'undefined') {
-        window.location.href = "/auth/login";
-      }
-    } catch (error) {
-      console.error("Logout error:", error);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem("userId");
-        window.location.href = "/auth/login";
-      }
+    // ✅ 1. NextAuth signout (if session)
+    if (session) {
+      await signOut({ redirect: false });
     }
-  };
+
+    // ✅ 2. Clear backend cookie
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+
+  } catch (error) {
+    console.error("Logout error:", error);
+  } finally {
+    // ✅ 3. Always clear local storage
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("userId");
+      window.location.href = "/auth/login";
+    }
+  }
+};
+
+    
 
   if (status === "loading" || loading) {
     return (
@@ -242,15 +225,15 @@ void loadData();    }
   }
 
   return (
-    <div className={dark ? "dark" : ""}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-[#06080e] dark:via-[#0f121b] dark:to-[#161b26] relative overflow-hidden p-6 transition-all">
+<div className="min-h-screen w-full bg-gradient-to-br from-[#020617] via-[#3b0764] to-[#020617] relative overflow-hidden p-4 sm:p-6 text-white text-[13px] sm:text-base leading-tight sm:leading-normal">
 
         <BackgroundOrbs />
 
         {/* HEADER */}
-        <div className="flex justify-between items-center mb-10 relative z-20">
-          <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-            Dashboard
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-6 sm:mb-10 relative z-20">
+
+<h1 className="text-2xl sm:text-4xl font-extrabold bg-gradient-to-r ...">
+
           </h1>
 
           <div className="flex gap-3 items-center">
@@ -264,14 +247,7 @@ void loadData();    }
               </button>
             </Link>
 
-            <button
-              onClick={toggleDark}
-              className="w-12 h-12 rounded-full bg-white/20 dark:bg-black/40 backdrop-blur-lg border border-white/10 hover:scale-110 transition flex items-center justify-center text-2xl"
-              title="Toggle Theme"
-            >
-              {dark ? "☀️" : "🌙"}
-            </button>
-
+            
             <div className="relative">
               <button
                 onClick={() => setMoreOpen(!moreOpen)}
@@ -326,12 +302,13 @@ void loadData();    }
               )}
             </div>
 
-            <button
-              onClick={logout}
-              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
-            >
-              Logout
-            </button>
+          <button
+  onClick={logout}
+  className="px-3 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-md hover:shadow-lg transition-all active:scale-95"
+>
+  Logout
+</button>
+
 
           </div>
         </div>
@@ -349,7 +326,8 @@ void loadData();    }
         <div className="max-w-5xl mx-auto mt-12 text-center grid grid-cols-1 sm:grid-cols-3 gap-4">
 
           <Link href="/dashboard/profit-calculator">
-            <button className="p-4 rounded-xl bg-green-500 text-white border border-white/20 hover:bg-green-600 transition w-full">
+                   <button
+className="p-3 sm:p-4 text-sm sm:text-base rounded-xl bg-green-500 text-white ...">
               Daily Profit Calculator ➜
             </button>
           </Link>
@@ -400,7 +378,8 @@ void loadData();    }
             <input
               value={`${typeof window !== "undefined" ? window.location.origin : ""}/auth/register?ref=${data.referralCode}`}
               readOnly
-              className="w-full bg-transparent outline-none text-white text-sm sm:text-base py-2 sm:py-0 truncate font-mono"
+             className="w-full bg-transparent outline-none text-white text-xs sm:text-base py-2 sm:py-0 break-all font-mono"
+
             />
             <button
               className="mt-3 sm:mt-0 sm:ml-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex-shrink-0 shadow-md"
@@ -493,7 +472,7 @@ void loadData();    }
         <Animations />
 
       </div>
-    </div>
+    
   );
 }
 
@@ -544,8 +523,8 @@ const ReferralTable: FC<ReferralTableProps> = ({
 
   return (
     <div className="bg-[#0f121b] p-4 sm:p-6 rounded-xl border border-gray-700/50 shadow-2xl mt-8">
-      <h3 className="text-2xl font-bold mb-5 text-white border-b border-gray-700 pb-3">
-        👥 My Referral Network
+<h3 className="text-lg sm:text-2xl font-bold mb-5 text-white">
+
       </h3>
 
       {/* Tabs for Levels - Mobile Scrollable */}
@@ -622,8 +601,8 @@ const ReferralTable: FC<ReferralTableProps> = ({
                   <span className="text-xs font-medium uppercase tracking-wider text-gray-400">
                     User Email
                   </span>
-                  <span className="text-sm font-semibold text-gray-200">
-                    {maskEmail(user.email)}
+<span className="text-xs sm:text-sm font-semibold text-gray-200 break-all">
+
                   </span>
                 </div>
                 <div className="flex justify-between items-center mb-1">
@@ -667,8 +646,8 @@ ${user?.stakedBalance
                 Previous
               </button>
 
-              <span className="text-gray-300 font-medium text-sm">
-                Page {currentPage} of {totalPages}
+<span className="text-gray-300 font-medium text-xs sm:text-sm">
+
               </span>
               
               <button
@@ -793,7 +772,8 @@ const Stats: FC<{ data: DashboardData }> = ({ data }) => {
           {stats.map((s, i) => (
             <div key={i} className="p-6 rounded-2xl bg-white/20 dark:bg-white/5 backdrop-blur-xl border border-white/20 text-white shadow-xl hover:scale-[1.02] transition">
               <p className="text-white/70">{s.name}</p>
-              <p className="text-3xl font-bold">{s.value}</p>
+              <p className="text-xl sm:text-3xl font-bold break-words">{s.value}</p>
+
             </div>
           ))}
         </div>

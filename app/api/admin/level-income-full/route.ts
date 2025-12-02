@@ -3,153 +3,196 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-export async function GET() {
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const revalidate = 0;
+
+export async function GET(req: Request) {
   try {
     await connectDB();
 
-    // ✅ AUTH CHECK
-    const cookieStore = await cookies();
+    /* =========================
+        ✅ ADMIN AUTH
+    ========================= */
+    const cookieStore = cookies();
     const token = cookieStore.get("token")?.value;
-    
+
     if (!token) {
-      return NextResponse.json(
-        { success: false, message: "No token" }, 
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, message: "No token" }, { status: 401 });
     }
 
-    const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
-    const admin = await User.findById(decoded.id);
+   let decoded: any;
+try {
+  decoded = jwt.verify(token, process.env.JWT_SECRET!);
+} catch (err) {
+  return NextResponse.json(
+    { success: false, message: "Session expired" },
+    { status: 401 }
+  );
+}
 
-    if (!admin || !admin.isAdmin) {
-      return NextResponse.json(
-        { success: false, message: "Admin only" }, 
-        { status: 403 }
-      );
+const admin = await User.findById(decoded.id).select("isAdmin").lean();
+
+
+    if (!admin?.isAdmin) {
+      return NextResponse.json({ success: false, message: "Admin only" }, { status: 403 });
     }
 
-    // ✅ GET ALL USERS WITH REFERRAL INFO AND LEVEL ARRAYS
-    const users: any[] = await User.find({})
-      .select("_id name email referredBy levelIncome referralEarnings level1 level2 level3 createdAt")
+    /* =========================
+       ✅ QUERY PARAMS (SEARCH + PAGINATION)
+    ========================= */
+    const { searchParams } = new URL(req.url);
+    const page = Number(searchParams.get("page") || 1);
+    const limit = Number(searchParams.get("limit") || 50);
+    const search = searchParams.get("search") || "";
+
+    const skip = (page - 1) * limit;
+
+    const searchFilter = search
+      ? {
+          $or: [
+            { name: { $regex: search, $options: "i" } },
+            { email: { $regex: search, $options: "i" } },
+          ],
+        }
+      : {};
+
+    /* =========================
+        ✅ GET ALL USERS FIRST (FOR TEAM MAP)
+    ========================= */
+    const allUsers = await User.find({})
+      .select("_id name email levelIncome")
       .lean();
 
-    // ✅ CREATE USER MAP FOR FASTER LOOKUP
-    const userMap = new Map();
-    users.forEach(u => userMap.set(String(u._id), u));
+    const userMap = new Map<string, any>();
+    allUsers.forEach((u) => userMap.set(String(u._id), u));
 
-    // ✅ HELPER: Get user details from ID array
-    const getUsersFromIds = (ids: any[]) => {
-      if (!ids || ids.length === 0) return [];
-      return ids.map(id => userMap.get(String(id))).filter(Boolean);
+    const mapTeamUsers = (ids: any[]) => {
+      if (!ids || !ids.length) return [];
+      return ids
+        .map((id) => {
+          const u = userMap.get(String(id));
+          if (!u) return null;
+          return {
+            _id: u._id,
+            name: u.name || "Unknown",
+            email: u.email,
+            income: Number(u.levelIncome || 0),
+          };
+        })
+        .filter(Boolean);
     };
 
-    // ✅ BUILD FULL LEVEL STRUCTURE USING LEVEL ARRAYS
-    const result = users.map((user: any) => {
-      // ✅ USE EXISTING LEVEL ARRAYS FROM DATABASE
-      const level1 = getUsersFromIds(user.level1 || []);
-      const level2 = getUsersFromIds(user.level2 || []);
-      const level3 = getUsersFromIds(user.level3 || []);
+    /* =========================
+       ✅ ULTRA-PRO MAIN QUERY
+    ========================= */
+    const users = await User.aggregate([
+      { $match: searchFilter },
 
-      // ✅ CALCULATE INCOME FROM ACTUAL USER DATA
-      // Each level user's income contributes to this user's levelIncome
-      const level1Income = level1.reduce(
-        (sum: number, u: any) => sum + (u.levelIncome || 0) + (u.referralEarnings || 0), 
-        0
-      ) * 0.10; // 10% of total earnings
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          createdAt: 1,
 
-      const level2Income = level2.reduce(
-        (sum: number, u: any) => sum + (u.levelIncome || 0) + (u.referralEarnings || 0), 
-        0
-      ) * 0.05; // 5% of total earnings
+          level1: { $ifNull: ["$level1", []] },
+          level2: { $ifNull: ["$level2", []] },
+          level3: { $ifNull: ["$level3", []] },
 
-      const level3Income = level3.reduce(
-        (sum: number, u: any) => sum + (u.levelIncome || 0) + (u.referralEarnings || 0), 
-        0
-      ) * 0.02; // 2% of total earnings
+          level1Income: { $ifNull: ["$level1Income", 0] },
+          level2Income: { $ifNull: ["$level2Income", 0] },
+          level3Income: { $ifNull: ["$level3Income", 0] },
 
-      // ✅ USE ACTUAL STORED VALUES FROM DATABASE
-      const storedLevelIncome = user.levelIncome || 0;
-      const storedReferralEarnings = user.referralEarnings || 0;
-
-      return {
-        user: {
-          _id: user._id,
-          name: user.name || "Unknown User",
-          email: user.email
+          referralEarnings: { $ifNull: ["$referralEarnings", 0] },
+          levelIncome: { $ifNull: ["$levelIncome", 0] },
         },
-
-        // ✅ LEVEL USERS WITH THEIR INCOME
-        level1Users: level1.map(u => ({
-          _id: u._id,
-          name: u.name || "Unknown User",
-          email: u.email,
-          income: (u.levelIncome || 0) + (u.referralEarnings || 0)
-        })),
-
-        level2Users: level2.map(u => ({
-          _id: u._id,
-          name: u.name || "Unknown User",
-          email: u.email,
-          income: (u.levelIncome || 0) + (u.referralEarnings || 0)
-        })),
-
-        level3Users: level3.map(u => ({
-          _id: u._id,
-          name: u.name || "Unknown User",
-          email: u.email,
-          income: (u.levelIncome || 0) + (u.referralEarnings || 0)
-        })),
-
-        // ✅ LEVEL INCOME BREAKDOWN (from database)
-        level1Income: 0, // Not calculated, use stored value
-        level2Income: 0, // Not calculated, use stored value
-        level3Income: 0, // Not calculated, use stored value
-
-        // ✅ COUNTS
-        level1Count: level1.length,
-        level2Count: level2.length,
-        level3Count: level3.length,
-
-        // ✅ TEAM SIZE
-        teamSize: level1.length + level2.length + level3.length,
-
-        // ✅ USE STORED VALUES FROM DATABASE
-        levelIncome: Number(storedLevelIncome.toFixed(2)),
-        referralEarnings: Number(storedReferralEarnings.toFixed(2)),
-        totalEarnings: Number((storedLevelIncome + storedReferralEarnings).toFixed(2)),
-
-        // ✅ METADATA
-        createdAt: user.createdAt || new Date().toISOString()
-      };
-    });
-
-    // ✅ SORT BY TOTAL EARNINGS (highest first)
-    const sortedResult = result.sort(
-      (a: any, b: any) => b.totalEarnings - a.totalEarnings
-    );
-
-    return NextResponse.json({
-      success: true,
-      users: sortedResult,
-      summary: {
-        totalUsers: users.length,
-        totalLevelIncome: sortedResult.reduce((sum: number, u: any) => sum + u.levelIncome, 0),
-        totalReferralEarnings: sortedResult.reduce((sum: number, u: any) => sum + u.referralEarnings, 0),
-        totalEarnings: sortedResult.reduce((sum: number, u: any) => sum + u.totalEarnings, 0)
-      }
-    });
-
-  } catch (err: any) {
-    console.error("❌ LEVEL INCOME API ERROR:", err);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: err.message,
-        details: process.env.NODE_ENV === 'development' ? err.stack : undefined
       },
-      { status: 500 }
-    );
-  }
+
+      {
+        $addFields: {
+          level1Count: { $size: "$level1" },
+          level2Count: { $size: "$level2" },
+          level3Count: { $size: "$level3" },
+
+          teamSize: {
+            $add: [
+              { $size: "$level1" },
+              { $size: "$level2" },
+              { $size: "$level3" },
+            ],
+          },
+
+          totalEarnings: { $add: ["$levelIncome", "$referralEarnings"] },
+        },
+      },
+
+      { $sort: { totalEarnings: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ]);
+
+    const totalUsers = await User.countDocuments(searchFilter);
+
+    /* =========================
+       ✅ FINAL FRONTEND-READY RESPONSE
+    ========================= */
+   return NextResponse.json({
+  success: true,
+
+  users: users.map((u: any) => ({
+    user: {
+      _id: u._id,
+      name: u.name || "Unknown",
+      email: u.email,
+      createdAt: u.createdAt,
+    },
+
+    // ✅ FRONTEND COMPATIBLE (income FIELD REQUIRED)
+    level1Users: mapTeamUsers(u.level1).map((x: any) => ({
+      ...x,
+      income: Number(x.income || 0)
+    })),
+
+    level2Users: mapTeamUsers(u.level2).map((x: any) => ({
+      ...x,
+      income: Number(x.income || 0)
+    })),
+
+    level3Users: mapTeamUsers(u.level3).map((x: any) => ({
+      ...x,
+      income: Number(x.income || 0)
+    })),
+
+    // ✅ SAFE INCOME VALUES
+    level1Income: Number((u.level1Income || 0).toFixed(2)),
+    level2Income: Number((u.level2Income || 0).toFixed(2)),
+    level3Income: Number((u.level3Income || 0).toFixed(2)),
+
+    level1Count: u.level1Count || 0,
+    level2Count: u.level2Count || 0,
+    level3Count: u.level3Count || 0,
+
+    teamSize: u.teamSize || 0,
+
+    levelIncome: Number((u.levelIncome || 0).toFixed(2)),
+    referralEarnings: Number((u.referralEarnings || 0).toFixed(2)),
+    totalEarnings: Number((u.totalEarnings || 0).toFixed(2)),
+  })),
+
+     pagination: {
+      page,
+      limit,
+      totalUsers,
+      totalPages: Math.ceil(totalUsers / limit),
+    },
+  });
+  
+} catch (err: any) {
+  console.error("❌ ULTRA-PRO LEVEL INCOME ERROR:", err);
+  return NextResponse.json(
+    { success: false, message: err.message },
+    { status: 500 }
+  );
+}
 }

@@ -30,11 +30,6 @@ export default function AdminLoginPage() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!mounted) return;
-    const isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setDark(isDarkMode);
-  }, [mounted]);
 
   // OTP Resend Timer
   useEffect(() => {
