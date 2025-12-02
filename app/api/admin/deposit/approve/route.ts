@@ -47,18 +47,20 @@ export async function POST(req: Request) {
         );
       }
 
-      const admin = await User.findOne({ email: session.user.email }).select('_id email role isAdmin');
-      
-      if (!admin || (admin.role !== "admin" && !admin.isAdmin)) {
-        console.warn(`⚠️ Unauthorized deposit approve attempt by: ${session.user.email}`);
-        return NextResponse.json(
-          { 
-            success: false,
-            message: "Admin privileges required to perform this action." 
-          },
-          { status: 403 }
-        );
-      }
+    const admin = await User.findOne({ email: session.user.email }).select('_id email isAdmin');
+
+// ✅ FIXED: Check only isAdmin field
+if (!admin || admin.isAdmin !== true) {
+  console.warn(`⚠️ Unauthorized deposit approve attempt by: ${session.user.email}`);
+  console.warn(`   Admin object:`, { id: admin?._id, email: admin?.email, isAdmin: admin?.isAdmin });
+  return NextResponse.json(
+    { 
+      success: false,
+      message: "Admin privileges required to perform this action." 
+    },
+    { status: 403 }
+  );
+}
       
       adminId = admin._id;
       adminEmail = admin.email;
