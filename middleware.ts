@@ -26,21 +26,17 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
 // 🌍 IP EXTRACTION (Vercel Compatible)
 // -------------------------------
 function getClientIP(request: NextRequest): string {
-  // Vercel/Production environments
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
     return forwardedFor.split(",")[0].trim();
   }
 
-  // Cloudflare
   const cfConnectingIP = request.headers.get("cf-connecting-ip");
   if (cfConnectingIP) return cfConnectingIP;
 
-  // Other proxies
   const realIP = request.headers.get("x-real-ip");
   if (realIP) return realIP;
 
-  // Fallback (development)
   return request.ip || "unknown";
 }
 
@@ -48,25 +44,14 @@ function getClientIP(request: NextRequest): string {
 // 🔒 SECURITY HEADERS
 // -------------------------------
 function addSecurityHeaders(response: NextResponse): NextResponse {
-  // Prevent clickjacking
   response.headers.set("X-Frame-Options", "DENY");
-  
-  // Prevent MIME sniffing
   response.headers.set("X-Content-Type-Options", "nosniff");
-  
-  // Enable XSS protection
   response.headers.set("X-XSS-Protection", "1; mode=block");
-  
-  // Referrer policy
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  
-  // Permissions policy
   response.headers.set(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=()"
   );
-
-  // Content Security Policy
   response.headers.set(
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
@@ -84,7 +69,6 @@ function checkRateLimit(ip: string, maxRequests = 100, windowMs = 60000): boolea
   const now = Date.now();
   const record = rateLimitMap.get(ip);
 
-  // Clean up expired entries periodically (every 100 requests)
   if (rateLimitMap.size > 1000) {
     cleanupRateLimitMap();
   }
@@ -102,7 +86,6 @@ function checkRateLimit(ip: string, maxRequests = 100, windowMs = 60000): boolea
   return true;
 }
 
-// Clean up old entries on-demand (Edge Runtime compatible)
 function cleanupRateLimitMap() {
   const now = Date.now();
   const entries = Array.from(rateLimitMap.entries());
@@ -133,21 +116,17 @@ const PROTECTED_ROUTES: RouteConfig[] = [
   { path: "/referrals", minRole: UserRole.USER },
   { path: "/settings", minRole: UserRole.USER },
 
-  // Admin routes with strict rate limiting
+  // Admin routes (UI only, not API)
   {
     path: "/admin",
     minRole: UserRole.ADMIN,
     rateLimit: { max: 50, window: 60000 },
   },
-  {
-    path: "/api/admin",
-    minRole: UserRole.ADMIN,
-    rateLimit: { max: 100, window: 60000 },
-  },
 
+  // ✅ REMOVED /api/admin from middleware - APIs handle their own auth
+  
   // Super admin routes
   { path: "/super-admin", minRole: UserRole.SUPER_ADMIN },
-  { path: "/api/super-admin", minRole: UserRole.SUPER_ADMIN },
 ];
 
 const PUBLIC_ROUTES = [
@@ -158,13 +137,16 @@ const PUBLIC_ROUTES = [
   "/auth/forgot-password",
   "/auth/verify-otp",
   "/auth/reset-password",
-  "/api/auth",
+  "/api/auth", // NextAuth routes
   "/terms",
   "/privacy",
   "/contact",
   "/_next",
   "/favicon.ico",
   "/api/health",
+  // ✅ CRITICAL: Allow admin API routes to handle their own auth
+  "/api/admin", 
+  "/api/super-admin",
 ];
 
 // -------------------------------
@@ -202,7 +184,6 @@ function createErrorResponse(
     );
   }
 
-  // Redirect to appropriate page
   const redirectMap: Record<number, string> = {
     401: "/auth/login",
     403: "/dashboard",
@@ -221,16 +202,14 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApiRoute = pathname.startsWith("/api");
 
-  // Allow public routes
+  // ✅ CRITICAL: Allow public routes (including /api/admin)
   if (isPublicRoute(pathname)) {
     const response = NextResponse.next();
     return addSecurityHeaders(response);
   }
 
-  // Get client IP (Vercel compatible)
   const clientIP = getClientIP(request);
 
-  // Get route configuration
   const routeConfig = getRouteConfig(pathname);
   if (!routeConfig) {
     const response = NextResponse.next();
@@ -302,10 +281,8 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // Success - add security headers
   const response = NextResponse.next();
   
-  // Add user info to headers (for API routes)
   if (isApiRoute) {
     response.headers.set("X-User-Id", String(token.id || ""));
     response.headers.set("X-User-Role", userRole);
@@ -320,13 +297,6 @@ export async function middleware(request: NextRequest) {
 // -------------------------------
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
