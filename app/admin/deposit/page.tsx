@@ -72,11 +72,12 @@ export default function AdminDepositPage() {
     setProcessing(id);
     
     try {
-      const res = await fetch("/api/admin/deposit/approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId: id }),
-      });
+     const res = await fetch("/api/admin/deposit/approve", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  credentials: "include",   // ✅✅✅ THIS IS THE FIX
+  body: JSON.stringify({ requestId: id }),
+});
 
       const data = await res.json();
 
@@ -135,14 +136,15 @@ export default function AdminDepositPage() {
     setProcessing(id);
 
     try {
-      const res = await fetch("/api/admin/deposit/reject", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          requestId: id,
-          reason: reason.trim()
-        }),
-      });
+     const res = await fetch("/api/admin/deposit/reject", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  credentials: "include",   // ✅✅✅ MUST
+  body: JSON.stringify({ 
+    requestId: id,
+    reason: reason.trim()
+  }),
+});
 
       const data = await res.json();
 
