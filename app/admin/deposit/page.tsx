@@ -36,7 +36,8 @@ export default function AdminDepositPage() {
     try {
       const res = await fetch("/api/admin/deposit/list", { 
         cache: "no-store",
-        headers: { "Cache-Control": "no-cache" }
+        headers: { "Cache-Control": "no-cache" },
+        credentials: "include" // ✅ ADDED FOR CONSISTENCY
       });
       
       if (!res.ok) {
@@ -72,27 +73,27 @@ export default function AdminDepositPage() {
     setProcessing(id);
     
     try {
-     const res = await fetch("/api/admin/deposit/approve", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  credentials: "include",   // ✅✅✅ THIS IS THE FIX
-  body: JSON.stringify({ requestId: id }),
-});
+      // ✅✅✅ CRITICAL FIX: Added credentials: "include"
+      const res = await fetch("/api/admin/deposit/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // ✅ THIS WAS MISSING - NOW FIXED
+        body: JSON.stringify({ requestId: id }),
+      });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Update local state
         setDeposits((prev) =>
           prev.map((d) => (d._id === id ? { ...d, status: "approved" as const } : d))
         );
-        alert("Deposit approved successfully!");
+        alert("✅ Deposit approved successfully!");
       } else {
         alert(data.message || "Failed to approve deposit");
       }
     } catch (error) {
       console.error("Approve error:", error);
-      alert("Error approving deposit");
+      alert("Error approving deposit. Please try again.");
     } finally {
       setProcessing(null);
       loadData();
@@ -102,7 +103,6 @@ export default function AdminDepositPage() {
   const rejectDeposit = async (id: string) => {
     if (processing) return;
     
-    // Step 1: Ask for rejection reason
     const reason = prompt(
       "Please provide a detailed reason for rejecting this deposit:\n\n" +
       "Common reasons:\n" +
@@ -113,7 +113,6 @@ export default function AdminDepositPage() {
       "Enter your reason:"
     );
 
-    // Step 2: Validate reason
     if (!reason || reason.trim().length === 0) {
       alert("⚠️ Rejection reason is required!");
       return;
@@ -124,7 +123,6 @@ export default function AdminDepositPage() {
       return;
     }
 
-    // Step 3: Confirm with reason preview
     const confirmed = confirm(
       `Are you sure you want to reject this deposit?\n\n` +
       `Reason:\n"${reason}"\n\n` +
@@ -136,20 +134,20 @@ export default function AdminDepositPage() {
     setProcessing(id);
 
     try {
-     const res = await fetch("/api/admin/deposit/reject", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  credentials: "include",   // ✅✅✅ MUST
-  body: JSON.stringify({ 
-    requestId: id,
-    reason: reason.trim()
-  }),
-});
+      // ✅✅✅ CRITICAL FIX: Added credentials: "include"
+      const res = await fetch("/api/admin/deposit/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // ✅ THIS WAS MISSING - NOW FIXED
+        body: JSON.stringify({ 
+          requestId: id,
+          reason: reason.trim()
+        }),
+      });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Update local state
         setDeposits((prev) =>
           prev.map((d) => (d._id === id ? { ...d, status: "rejected" as const } : d))
         );
@@ -159,7 +157,7 @@ export default function AdminDepositPage() {
       }
     } catch (error) {
       console.error("Reject error:", error);
-      alert("Error rejecting deposit");
+      alert("Error rejecting deposit. Please try again.");
     } finally {
       setProcessing(null);
       loadData();
