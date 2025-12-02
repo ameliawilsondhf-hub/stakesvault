@@ -17,72 +17,90 @@ export async function POST(req: Request) {
     console.log("✅ MongoDB Connected");
 
     // ============================================
-    // 1. AUTHENTICATION & AUTHORIZATION
+    // 1. AUTHENTICATION & AUTHORIZATION (FIXED)
     // ============================================
-    const isDevelopment = process.env.NODE_ENV === 'development';
     let adminId = null;
+    let adminEmail = null;
 
-    if (!isDevelopment) {
-      // Production mode - strict authentication
-      const session = await getServerSession(authOptions);
-      console.log("🔐 Session exists:", !!session);
-      
-      if (!session?.user?.email) {
-        console.error("❌ No session found");
-        return NextResponse.json(
-          { 
-            success: false,
-            message: "Authentication required. Please login to continue." 
-          },
-          { status: 401 }
-        );
-      }
+    // ✅ FIX: Get session with proper cookie handling
+    const session = await getServerSession(authOptions);
+    
+    // ✅ DEBUG: Log session for troubleshooting
+    console.log("🔍 Session Debug:", {
+      hasSession: !!session,
+      email: session?.user?.email,
+      env: process.env.NODE_ENV,
+      vercel: process.env.VERCEL
+    });
 
-      console.log("👤 Session email:", session.user.email);
+    if (!session?.user?.email) {
+      console.error("❌ No session found or email missing");
+      return NextResponse.json(
+        { 
+          success: false,
+          message: "Authentication required. Please login again.",
+          debug: process.env.NODE_ENV === 'development' ? {
+            hasSession: !!session,
+            email: session?.user?.email
+          } : undefined
+        },
+        { status: 401 }
+      );
+    }
 
-      // ✅ FIXED: Only check isAdmin field, not role
-      const admin = await User.findOne({ email: session.user.email }).select('_id email isAdmin');
-      
-      console.log("🔍 Admin lookup result:", {
-        found: !!admin,
-        email: admin?.email,
-        isAdmin: admin?.isAdmin,
-        isAdminType: typeof admin?.isAdmin
+    console.log("👤 Session email:", session.user.email);
+
+    // ✅ FIX: Find admin user with better error handling
+    const admin = await User.findOne({ 
+      email: session.user.email 
+    }).select('_id email isAdmin name').lean();
+
+    console.log("🔍 Admin Check:", {
+      email: session.user.email,
+      found: !!admin,
+      isAdmin: admin?.isAdmin,
+      isAdminType: typeof admin?.isAdmin
+    });
+
+    if (!admin) {
+      console.error("❌ Admin user not found in database");
+      return NextResponse.json(
+        { 
+          success: false,
+          message: "User account not found. Please contact support.",
+          debug: process.env.NODE_ENV === 'development' ? {
+            email: session.user.email,
+            userFound: false
+          } : undefined
+        },
+        { status: 404 }
+      );
+    }
+
+    // ✅ FIX: Strict admin check with proper logging
+    if (admin.isAdmin !== true) {
+      console.warn("⚠️ Non-admin user attempted access:", {
+        email: admin.email,
+        isAdmin: admin.isAdmin
       });
 
-      if (!admin || admin.isAdmin !== true) {
-        console.error("❌ User is not admin:", {
-          userExists: !!admin,
-          isAdminValue: admin?.isAdmin
-        });
-        return NextResponse.json(
-          { 
-            success: false,
-            message: "Admin privileges required to perform this action." 
-          },
-          { status: 403 }
-        );
-      }
-
-      adminId = admin._id;
-      console.log("✅ Admin verified:", adminId);
-
-    } else {
-      // Development mode - optional authentication
-      console.log("⚠️ Running in DEVELOPMENT mode");
-      try {
-        const session = await getServerSession(authOptions);
-        if (session?.user?.email) {
-          const admin = await User.findOne({ email: session.user.email });
-          if (admin) {
-            adminId = admin._id;
-            console.log("✅ Dev mode: Admin found:", adminId);
-          }
-        }
-      } catch (err) {
-        console.log("⚠️ Dev mode: No admin session, continuing anyway");
-      }
+      return NextResponse.json(
+        { 
+          success: false,
+          message: "Admin privileges required to perform this action.",
+          debug: process.env.NODE_ENV === 'development' ? {
+            isAdmin: admin.isAdmin,
+            email: admin.email
+          } : undefined
+        },
+        { status: 403 }
+      );
     }
+
+    adminId = admin._id;
+    adminEmail = admin.email;
+
+    console.log("✅ Admin authenticated:", adminEmail);
 
     // ============================================
     // 2. REQUEST VALIDATION
@@ -189,15 +207,14 @@ export async function POST(req: Request) {
     // ============================================
     deposit.status = "rejected";
     deposit.rejectedAt = new Date();
-    if (adminId) {
-      deposit.rejectedBy = adminId;
-    }
+    deposit.rejectedBy = adminId;
     deposit.rejectionReason = reason.trim();
     
     await deposit.save();
 
     console.log("✅ Deposit rejected successfully");
     console.log("📝 Rejection reason:", deposit.rejectionReason);
+    console.log("👮 Rejected by admin:", adminEmail);
 
     // ============================================
     // 6. SEND EMAIL NOTIFICATION
@@ -230,7 +247,9 @@ export async function POST(req: Request) {
         amount: deposit.amount,
         reason: deposit.rejectionReason,
         rejectedAt: deposit.rejectedAt,
-        status: deposit.status
+        rejectedBy: adminEmail,
+        status: deposit.status,
+        timestamp: new Date().toISOString()
       }
     });
 
