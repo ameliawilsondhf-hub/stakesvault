@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 
-export default function VerifyOTPPage() {
+// ✅ Separate component for content that uses useSearchParams
+function VerifyOTPContent() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [otp, setOtp] = useState("");
@@ -61,7 +62,6 @@ export default function VerifyOTPPage() {
 
       if (!res.ok || !data.success) {
         console.error("❌ Verification failed:", data.message);
-        // Clear OTP input on error
         setOtp("");
         setError(data.message || "Invalid or expired OTP");
         setLoading(false);
@@ -141,7 +141,7 @@ export default function VerifyOTPPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-5">
 
             {/* OTP Input */}
             <div>
@@ -156,7 +156,11 @@ export default function VerifyOTPPage() {
                 className="w-full h-12 bg-[#1E2329] border border-[#2B3139] text-white text-center text-xl font-mono tracking-[0.5em] rounded-lg focus:outline-none focus:border-[#F0B90B] transition-colors"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                required
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && otp.length === 6) {
+                    handleSubmit(e);
+                  }
+                }}
                 disabled={loading}
                 autoFocus
               />
@@ -187,7 +191,7 @@ export default function VerifyOTPPage() {
 
             {/* Submit Button */}
             <button
-              type="submit"
+              onClick={handleSubmit}
               disabled={loading || otp.length !== 6}
               className="w-full h-12 bg-[#F0B90B] hover:bg-[#F8D12F] text-[#0B0E11] font-bold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
             >
@@ -213,7 +217,7 @@ export default function VerifyOTPPage() {
               ← Back to Login
             </button>
 
-          </form>
+          </div>
 
           {/* Help Info */}
           <div className="mt-6 p-4 bg-[#1E2329] rounded-lg border border-[#2B3139]">
@@ -289,5 +293,18 @@ export default function VerifyOTPPage() {
       `}</style>
 
     </div>
+  );
+}
+
+// ✅ Main export with Suspense wrapper (Required for Vercel deployment)
+export default function VerifyOTPPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0B0E11] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#F0B90B] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <VerifyOTPContent />
+    </Suspense>
   );
 }
