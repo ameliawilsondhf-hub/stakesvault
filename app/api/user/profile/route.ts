@@ -14,13 +14,16 @@ export async function GET(request: Request) {
 
     let userId = null;
 
-    // ✅ Check NextAuth Session
+    // ✅ Strategy 1: Check NextAuth Session first
     try {
       const session = await getServerSession(authOptions);
-      if (session && session.user) {
+      if (session?.user) {
+        // Try to get ID from session
         userId = (session.user as any).id;
-        if (!userId) {
-          const user = await User.findOne({ email: session.user.email });
+        
+        // If no ID in session, find by email
+        if (!userId && session.user.email) {
+          const user = await User.findOne({ email: session.user.email }).select('_id').lean();
           if (user) userId = user._id.toString();
         }
       }
@@ -28,58 +31,94 @@ export async function GET(request: Request) {
       console.log("⚠️ NextAuth check failed:", err);
     }
 
-    // ✅ Check JWT Token
+    // ✅ Strategy 2: Check JWT Token if NextAuth failed
     if (!userId) {
       try {
-        const cookieStore = cookies();
-        const token = (await cookieStore).get("token");
+        const cookieStore = await cookies();
+        const token = cookieStore.get("token");
         
-        if (token && token.value) {
+        if (token?.value) {
           const decoded: any = jwt.verify(token.value, process.env.JWT_SECRET!);
-          userId = decoded.id;
+          userId = decoded.id || decoded.userId;
         }
       } catch (err: any) {
         console.log("⚠️ JWT verification failed:", err.message);
       }
     }
 
+    // ❌ No valid authentication found
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Please login again" }, 
+        { status: 401 }
+      );
     }
 
-    // ✅ Fetch user profile (don't exclude password field yet)
-const user = await User.findById(userId)
-  .select(`
-    -password 
-    -level1 
-    -level2 
-    -level3
-    +twoFactorEnabled
-    +twoFactorVerified
-  `)
-  .lean();
-
+    // ✅ Fetch user profile with all required fields
+    const user = await User.findById(userId)
+      .select(`
+        name 
+        email 
+        phone 
+        country 
+        emailVerified 
+        twoFactorEnabled 
+        twoFactorVerified
+        provider
+        createdAt
+        updatedAt
+      `)
+      .lean();
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "User not found", message: "Account does not exist" }, 
+        { status: 404 }
+      );
     }
 
-    // ✅ Check if user has password (OAuth users don't have password)
-    const hasPassword = (user as any).password ? true : false;
+    // ✅ Check if user has password (OAuth users don't have password field)
+    const fullUser = await User.findById(userId).select('password').lean();
+    const hasPassword = fullUser && (fullUser as any).password ? true : false;
 
-    // ✅ Remove password from response but indicate if it exists
-    const response = {
-      ...(user as any),
-      password: undefined, // Don't send actual password
-      hasPassword: hasPassword, // But indicate if user has one
+    // ✅ Build safe response object
+    const profileData = {
+      id: userId,
+      name: (user as any).name || "",
+      email: (user as any).email || "",
+      phone: (user as any).phone || "",
+      country: (user as any).country || "",
+      emailVerified: (user as any).emailVerified || false,
+      twoFactorEnabled: (user as any).twoFactorEnabled || false,
+      twoFactorVerified: (user as any).twoFactorVerified || false,
+      hasPassword: hasPassword,
+      provider: (user as any).provider || "credentials",
+      createdAt: (user as any).createdAt,
+      updatedAt: (user as any).updatedAt,
     };
 
-    return NextResponse.json(response);
+    return NextResponse.json(profileData, { status: 200 });
 
   } catch (error: any) {
-    console.error("❌ Profile fetch error:", error);
+    console.error("❌ Profile API Error:", error);
+    
+    // Handle specific errors
+    if (error.name === 'JsonWebTokenError') {
+      return NextResponse.json(
+        { error: "Invalid token", message: "Please login again" },
+        { status: 401 }
+      );
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      return NextResponse.json(
+        { error: "Token expired", message: "Session expired, please login again" },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Server error", details: error.message },
+      { error: "Server error", message: "Something went wrong", details: error.message },
       { status: 500 }
     );
   }

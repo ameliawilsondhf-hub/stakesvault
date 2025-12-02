@@ -378,7 +378,7 @@ className="p-3 sm:p-4 text-sm sm:text-base rounded-xl bg-green-500 text-white ..
             <input
               value={`${typeof window !== "undefined" ? window.location.origin : ""}/auth/register?ref=${data.referralCode}`}
               readOnly
-             className="w-full bg-transparent outline-none text-white text-xs sm:text-base py-2 sm:py-0 break-all font-mono"
+className="w-full bg-transparent outline-none text-white text-[11px] sm:text-base py-2 sm:py-0 break-all font-mono tracking-tight"
 
             />
             <button
@@ -647,8 +647,9 @@ ${user?.stakedBalance
               </button>
 
 <span className="text-gray-300 font-medium text-xs sm:text-sm">
+  Page {currentPage} of {totalPages}
+</span>
 
-              </span>
               
               <button
                 onClick={() => handlePageChange(currentPage + 1)}

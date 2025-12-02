@@ -46,6 +46,10 @@ function LoginContent() {
   const [success, setSuccess] = useState(false);
   const [dark, setDark] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+const [show2FA, setShow2FA] = useState(false);
+const [tempToken, setTempToken] = useState("");
+const [twoFaOtp, setTwoFaOtp] = useState("");
+const [verifying2FA, setVerifying2FA] = useState(false);
 
   // Ban popup states
   const [showBanPopup, setShowBanPopup] = useState(false);
@@ -140,9 +144,52 @@ function LoginContent() {
   }, [session, mounted]);
 
   const toggleDark = () => setDark(!dark);
+// ✅ STEP 3: VERIFY 2FA OTP HANDLER  (✅ SAHI JAGAH)
+const handleVerify2FA = async () => {
+  if (!twoFaOtp || !tempToken) {
+    setError("OTP required");
+    return;
+  }
+
+  setVerifying2FA(true);
+  setError("");
+
+  try {
+    const res = await fetch("/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        otp: twoFaOtp,
+        tempToken: tempToken,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.message || "Invalid OTP");
+      setVerifying2FA(false);
+      return;
+    }
+
+    // ✅ OTP SUCCESS → LOGIN COMPLETE
+    setShow2FA(false);
+    setTwoFaOtp("");
+    setTempToken("");
+    router.push("/dashboard");
+
+  } catch (err) {
+    console.error("2FA Verify Error:", err);
+    setError("OTP verification failed");
+  } finally {
+    setVerifying2FA(false);
+  }
+};
 
   // 🔥 ENHANCED: Handle login with IP blocking
   const handleSubmit = async (e: any) => {
+    
     e.preventDefault();
     
     // Check if blocked
@@ -156,6 +203,7 @@ function LoginContent() {
 
     try {
       const res = await fetch("/api/auth/login", {
+        
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -163,6 +211,20 @@ function LoginContent() {
       });
 
       const data = await res.json();
+      // ✅ AGAR 2FA ENABLED HAI
+if (data.requires2FA && data.tempToken) {
+  setTempToken(data.tempToken);
+  setShow2FA(true);
+  setLoading(false); // ✅ YEH LINE ADD KARO
+  return;
+}
+
+
+// ✅ NORMAL LOGIN FLOW
+if (data.success) {
+  router.push("/dashboard");
+}
+
 
       // 🔥 Handle IP blocking response
       if (res.status === 429) {
@@ -194,15 +256,6 @@ function LoginContent() {
       // Reset attempts on successful login
       setAttemptsRemaining(5);
 
-      // 2FA check
-      if (data.requires2FA) {
-        sessionStorage.setItem("tempToken", data.tempToken);
-        sessionStorage.setItem("userEmail", email);
-
-        setSuccess(true);
-        setTimeout(() => router.push("/auth/verify-otp"), 500);
-        return;
-      }
 
       if (data.userId) {
         localStorage.setItem("userId", data.userId);
@@ -249,8 +302,8 @@ function LoginContent() {
   if (!mounted) return null;
 
   return (
-    <div className={dark ? "dark" : ""}>
-      {/* 🔥 IP BLOCKED POPUP */}
+<div className="dark bg-[#020617] text-white">
+
   {/* 🔥 PROFESSIONAL IP BLOCKED POPUP */}
 {/* 🔥 PROFESSIONAL IP BLOCKED POPUP - WITH CLICKABLE FORGOT PASSWORD */}
 {showBlockedPopup && isBlocked && (
@@ -410,10 +463,43 @@ function LoginContent() {
           </div>
         </div>
       )}
+{show2FA && (
+  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999]">
+    <div className="bg-white dark:bg-[#111827] p-8 rounded-2xl shadow-2xl w-[90%] max-w-sm">
+      
+      <h2 className="text-xl font-bold text-center mb-4 text-gray-800 dark:text-white">
+        🔐 Two Factor Authentication
+      </h2>
+
+      <input
+        type="text"
+        placeholder="Enter 6 digit OTP"
+        value={twoFaOtp}
+        onChange={(e) => setTwoFaOtp(e.target.value)}
+        className="w-full p-3 border rounded-xl mb-4 text-center text-lg"
+      />
+
+      {error && (
+        <div className="text-red-500 text-sm mb-3 text-center">
+          {error}
+        </div>
+      )}
+
+      <button
+        onClick={handleVerify2FA}
+        disabled={verifying2FA}
+        className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold"
+      >
+        {verifying2FA ? "Verifying..." : "Verify OTP"}
+      </button>
+
+    </div>
+  </div>
+)}
 
       {/* Main Login Page */}
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#0a0e1a] dark:via-[#0f1419] dark:to-[#1a1f2e] flex items-center justify-center p-4 relative overflow-hidden transition-all duration-500">
-        
+<div className="min-h-screen w-full bg-gradient-to-br from-[#020617] via-[#1e293b] to-[#020617] flex items-center justify-center p-3 sm:p-4 relative overflow-hidden text-white">
+
         {/* Animated Background Orbs */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <img src="/stakevault.png" className="rotate-bg absolute w-[300px] top-10 left-10" alt="" />
@@ -433,7 +519,8 @@ function LoginContent() {
         </div>
 
         {/* Login Card */}
-        <div className="relative bg-white/95 dark:bg-[#1a1f2e]/95 backdrop-blur-xl shadow-2xl rounded-3xl p-10 w-full max-w-md border border-gray-200/50 dark:border-gray-700/50 animate-fade-in z-10">
+        
+<div className="relative bg-[#0f172a] text-white shadow-2xl rounded-2xl p-6 sm:p-10 w-full max-w-sm sm:max-w-md border border-white/10 animate-fade-in z-10">
 
           <div className="absolute -inset-1 bg-gradient-to-r from-[#0f172a] via-[#1e293b] to-[#0f172a] rounded-3xl blur-lg opacity-25 dark:opacity-30 animate-pulse-slow"></div>
 
@@ -445,8 +532,8 @@ function LoginContent() {
             {dark ? "☀️" : "🌙"}
           </button>
 
-          <div className="relative z-10">
-            {/* Logo */}
+<div className="relative z-10 text-[13px] sm:text-base leading-tight sm:leading-normal">
+
             <div className="text-center mb-8">
               <div className="relative inline-block mb-4">
                 <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-teal-400 to-cyan-400 rounded-full blur-2xl opacity-50 animate-pulse-slow scale-110"></div>
@@ -460,8 +547,8 @@ function LoginContent() {
                 </div>
               </div>
 
-              <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-blue-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent mb-2">
-                StakeVault
+<h1 className="text-2xl sm:text-4xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+
               </h1>
               <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
                 🔒 Secure login to your account
@@ -598,7 +685,8 @@ function LoginContent() {
               <div className="text-center">
                 <Link
                   href="/auth/forgot-password"
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 hover:underline"
+
                 >
                   Forgot your password?
                 </Link>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 export default function VerifyOTPPage() {
   const router = useRouter();
@@ -12,19 +12,20 @@ export default function VerifyOTPPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const searchParams = useSearchParams();
+  const tempToken = searchParams.get("tempToken");
 
   useEffect(() => {
     setMounted(true);
-    
-    // Get email from session
-    const email = sessionStorage.getItem("userEmail");
-    if (email) {
-      setUserEmail(email);
-    } else {
-      // No session, redirect to login
-      router.push("/auth/login");
+    const savedEmail = sessionStorage.getItem("userEmail");
+    if (savedEmail) {
+      setUserEmail(savedEmail);
     }
-  }, [router]);
+    if (!tempToken) {
+      setError("Session expired. Please login again.");
+      setTimeout(() => router.push("/auth/login"), 2000);
+    }
+  }, [tempToken, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,13 +33,16 @@ export default function VerifyOTPPage() {
     setLoading(true);
 
     try {
-      const tempToken = sessionStorage.getItem("tempToken");
-      
       if (!tempToken) {
         setError("Session expired. Please login again.");
+        setLoading(false);
         setTimeout(() => router.push("/auth/login"), 2000);
         return;
       }
+
+      console.log("🔄 Sending OTP verification request...");
+      console.log("📝 OTP:", otp);
+      console.log("🔑 TempToken exists:", !!tempToken);
 
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
@@ -50,32 +54,43 @@ export default function VerifyOTPPage() {
         }),
       });
 
-      const data = await res.json();
+      console.log("📡 Response status:", res.status);
 
-      if (!res.ok) {
-        setError(data.message || "Invalid OTP code");
+      const data = await res.json();
+      console.log("📥 Response data:", data);
+
+      if (!res.ok || !data.success) {
+        console.error("❌ Verification failed:", data.message);
+        // Clear OTP input on error
+        setOtp("");
+        setError(data.message || "Invalid or expired OTP");
         setLoading(false);
         return;
       }
 
-      // Success!
-      if (data.userId) {
-        localStorage.setItem("userId", data.userId);
+      console.log("✅ Verification successful!");
+
+      if (data.user && data.user.id) {
+        localStorage.setItem("userId", data.user.id);
+        localStorage.setItem("userEmail", data.user.email);
+        localStorage.setItem("userName", data.user.name || "");
+        console.log("💾 User data saved to localStorage");
       }
       
-      // Clear session storage
       sessionStorage.removeItem("tempToken");
       sessionStorage.removeItem("userEmail");
 
       setSuccess(true);
       setLoading(false);
       
+      console.log("🔄 Redirecting to dashboard in 800ms...");
       setTimeout(() => {
         window.location.href = "/dashboard";
-      }, 1000);
+      }, 800);
       
     } catch (error) {
       console.error("❌ OTP verification error:", error);
+      setOtp("");
       setError("Server error. Please try again.");
       setLoading(false);
     }
@@ -88,84 +103,85 @@ export default function VerifyOTPPage() {
   };
 
   if (!mounted) {
-    return null;
+    return (
+      <div className="min-h-screen bg-[#0B0E11] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#F0B90B] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#0a0e1a] dark:via-[#0f1419] dark:to-[#1a1f2e] flex items-center justify-center p-4 relative overflow-hidden transition-all duration-500">
-
-      {/* Animated Background Orbs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute w-[600px] h-[600px] bg-gradient-to-r from-blue-400 to-cyan-300 dark:from-blue-600 dark:to-cyan-500 opacity-20 rounded-full blur-3xl -top-32 -left-32 animate-float"></div>
-        <div className="absolute w-[500px] h-[500px] bg-gradient-to-r from-purple-400 to-pink-300 dark:from-purple-600 dark:to-pink-500 opacity-20 rounded-full blur-3xl top-1/3 -right-32 animate-float-slow"></div>
-      </div>
-
-      {/* OTP Card */}
-      <div className="relative bg-white/95 dark:bg-[#1a1f2e]/95 backdrop-blur-xl shadow-2xl rounded-3xl p-10 w-full max-w-md border border-gray-200/50 dark:border-gray-700/50 animate-fade-in z-10">
+    <div className="min-h-screen bg-[#0B0E11] flex items-center justify-center p-4">
+      
+      {/* Main Card */}
+      <div className="w-full max-w-[380px] bg-[#181A20] rounded-2xl overflow-hidden shadow-2xl">
         
-        {/* Card Glow Effect */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-3xl blur-lg opacity-20 dark:opacity-30 animate-pulse-slow"></div>
-
-        <div className="relative z-10">
-          
-          {/* Icon */}
-          <div className="text-center mb-6">
-            <div className="relative inline-block mb-4">
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-400 rounded-full blur-2xl opacity-50 animate-pulse-slow scale-110"></div>
-              <div className="relative w-20 h-20 mx-auto rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center shadow-2xl">
-                <span className="text-4xl">🔐</span>
-              </div>
-            </div>
-            
-            <h1 className="text-3xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-blue-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent mb-2">
-              Two-Factor Authentication
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">
-              Enter the 6-digit code from your authenticator app
-            </p>
-            {userEmail && (
-              <p className="text-gray-500 dark:text-gray-500 text-xs mt-2">
-                {userEmail}
-              </p>
-            )}
+        {/* Header Section */}
+        <div className="bg-gradient-to-r from-[#F0B90B] to-[#F8D12F] p-6 text-center">
+          <div className="w-16 h-16 mx-auto mb-3 bg-white rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-[#F0B90B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
           </div>
+          <h1 className="text-2xl font-bold text-[#0B0E11] mb-1">
+            Security Verification
+          </h1>
+          <p className="text-sm text-[#0B0E11]/80">
+            Enter your 2FA code
+          </p>
+        </div>
 
-          {/* Form */}
+        {/* Content Section */}
+        <div className="p-6">
+          
+          {userEmail && (
+            <div className="mb-6 p-3 bg-[#1E2329] rounded-lg text-center">
+              <p className="text-xs text-[#848E9C] mb-1">Logged in as</p>
+              <p className="text-sm text-[#EAECEF] font-medium">{userEmail}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
 
             {/* OTP Input */}
             <div>
-              <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block text-center">
-                Authentication Code
+              <label className="block text-sm font-medium text-[#EAECEF] mb-2">
+                2FA Code
               </label>
               <input
                 type="text"
                 placeholder="000000"
                 maxLength={6}
                 pattern="[0-9]{6}"
-                className="w-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#1f2937] text-gray-900 dark:text-white p-4 rounded-xl focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-all text-center text-2xl font-mono tracking-widest"
+                className="w-full h-12 bg-[#1E2329] border border-[#2B3139] text-white text-center text-xl font-mono tracking-[0.5em] rounded-lg focus:outline-none focus:border-[#F0B90B] transition-colors"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                 required
                 disabled={loading}
                 autoFocus
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
-                Code refreshes every 30 seconds
+              <p className="text-xs text-[#848E9C] text-center mt-2">
+                Enter the 6-digit code from your authenticator app
               </p>
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl text-sm text-center animate-shake">
-                ⚠️ {error}
+              <div className="bg-[#2B1515] border border-[#CF304A] rounded-lg p-3 flex items-center gap-2 animate-shake">
+                <svg className="w-5 h-5 flex-shrink-0 text-[#F6465D]" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm text-[#F6465D] font-medium">{error}</span>
               </div>
             )}
 
             {/* Success Message */}
             {success && (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-xl text-sm text-center animate-pulse">
-                ✓ Verification Successful! Redirecting...
+              <div className="bg-[#0E3F21] border border-[#0ECB81] text-[#0ECB81] px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span className="font-medium">Verified! Redirecting...</span>
               </div>
             )}
 
@@ -173,7 +189,7 @@ export default function VerifyOTPPage() {
             <button
               type="submit"
               disabled={loading || otp.length !== 6}
-              className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white p-4 rounded-xl font-bold shadow-lg shadow-blue-500/50 dark:shadow-blue-800/50 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="w-full h-12 bg-[#F0B90B] hover:bg-[#F8D12F] text-[#0B0E11] font-bold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -184,73 +200,94 @@ export default function VerifyOTPPage() {
                   Verifying...
                 </span>
               ) : (
-                "Verify & Login"
+                "Verify"
               )}
             </button>
 
-            {/* Back to Login */}
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={handleBackToLogin}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium transition"
-              >
-                ← Back to Login
-              </button>
-            </div>
+            {/* Back Button */}
+            <button
+              type="button"
+              onClick={handleBackToLogin}
+              className="w-full h-10 text-[#F0B90B] text-sm font-medium hover:text-[#F8D12F] transition-colors"
+            >
+              ← Back to Login
+            </button>
 
           </form>
 
-          {/* Help Section */}
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-            <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
-              📱 Need Help?
-            </h3>
-            <ul className="text-xs text-blue-700 dark:text-blue-400 space-y-1">
-              <li>• Open your Google Authenticator or Authy app</li>
-              <li>• Find the StakeVault entry</li>
-              <li>• Enter the 6-digit code shown</li>
-              <li>• Code changes every 30 seconds</li>
-            </ul>
+          {/* Help Info */}
+          <div className="mt-6 p-4 bg-[#1E2329] rounded-lg border border-[#2B3139]">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-[#F0B90B]" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-[#EAECEF] mb-2">
+                  How to get your code
+                </h3>
+                <ul className="text-xs text-[#848E9C] space-y-1.5">
+                  <li>1. Open Google Authenticator or Authy</li>
+                  <li>2. Find your StakeVault account</li>
+                  <li>3. Enter the 6-digit code shown</li>
+                  <li>4. Code refreshes every 30 seconds</li>
+                </ul>
+              </div>
+            </div>
           </div>
 
-          {/* Footer */}
-          <div className="text-center text-xs text-gray-500 dark:text-gray-600 mt-6">
-            © {new Date().getFullYear()} StakeVault • Secured by 2FA
-          </div>
         </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-[#0B0E11] border-t border-[#2B3139]">
+          <p className="text-xs text-[#848E9C] text-center">
+            Secured by Two-Factor Authentication
+          </p>
+        </div>
+
       </div>
 
-      {/* Animations */}
-      <style jsx>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(20px) scale(0.95); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
+      {/* Global Styles */}
+      <style jsx global>{`
+        * {
+          -webkit-tap-highlight-color: transparent;
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          user-select: none;
         }
-        @keyframes float {
-          0%, 100% { transform: translate(0, 0) rotate(0deg); }
-          33% { transform: translate(30px, -30px) rotate(120deg); }
-          66% { transform: translate(-20px, 20px) rotate(240deg); }
+        
+        input {
+          -webkit-user-select: text;
+          user-select: text;
         }
-        @keyframes float-slow {
-          0%, 100% { transform: translate(0, 0) rotate(0deg); }
-          50% { transform: translate(-30px, 30px) rotate(180deg); }
+        
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+          input {
+            font-size: 16px !important;
+          }
         }
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.2; }
-          50% { opacity: 0.4; }
+        
+        /* Prevent zoom on input focus iOS */
+        @media screen and (max-width: 768px) {
+          input:focus {
+            font-size: 16px;
+          }
         }
+
+        /* Shake animation for errors */
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
-          75% { transform: translateX(5px); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+          20%, 40%, 60%, 80% { transform: translateX(4px); }
         }
-        .animate-fade-in { animation: fade-in 0.6s ease-out; }
-        .animate-float { animation: float 20s ease-in-out infinite; }
-        .animate-float-slow { animation: float-slow 25s ease-in-out infinite; }
-        .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
-        .animate-shake { animation: shake 0.4s ease-in-out; }
+        
+        .animate-shake {
+          animation: shake 0.5s ease-in-out;
+        }
       `}</style>
+
     </div>
   );
 }

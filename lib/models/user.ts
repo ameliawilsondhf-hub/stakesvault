@@ -114,6 +114,8 @@ export interface IUser extends Document {
     // Authentication & Verification
     twoFactorEnabled: boolean;
     twoFactorSecret?: string;
+    twoFactorTempSecret?: string;   // ✅ ADD THIS LINE ONLY
+
     twoFactorBackupCodes: string[];
     emailVerified: boolean;
     isVerified: boolean;
@@ -274,9 +276,13 @@ const UserSchema = new Schema<IUser>(
 
         twoFactorEnabled: { type: Boolean, default: false },
         twoFactorSecret: { type: String, select: false },
-        twoFactorBackupCodes: [String],
+        twoFactorTempSecret: { type: String, select: false }, // ✅ ADD THIS
+
+    
+
         emailVerified: { type: Boolean, default: false },
         isVerified: { type: Boolean, default: false },
+        
         lastLogin: Date,
         
         resetPasswordToken: String,

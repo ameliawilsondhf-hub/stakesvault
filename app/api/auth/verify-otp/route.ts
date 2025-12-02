@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import * as speakeasy from "speakeasy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,9 @@ export async function POST(req: Request) {
     await connectDB();
 
     const { tempToken, otp } = await req.json();
+
+    console.log("📥 OTP Verification Request");
+    console.log("🔑 OTP:", otp);
 
     if (!tempToken || !otp) {
       return NextResponse.json(
@@ -24,62 +28,87 @@ export async function POST(req: Request) {
     let decoded: any;
     try {
       decoded = jwt.verify(tempToken, process.env.JWT_SECRET!);
-    } catch (err) {
+      console.log("✅ Token decoded:", { 
+        id: decoded.id, 
+        purpose: decoded.purpose 
+      });
+    } catch (err: any) {
+      console.error("❌ Token verification failed:", err.message);
       return NextResponse.json(
         { success: false, message: "Session expired. Please login again." },
         { status: 401 }
       );
     }
 
-    // ✅ MUST BE ADMIN OTP TOKEN
-    if (!decoded.temp || decoded.purpose !== "admin-otp-verification") {
-      return NextResponse.json(
-        { success: false, message: "Invalid OTP session" },
-        { status: 401 }
-      );
-    }
-
-    // ✅ FIND ADMIN USER
-    const user = await User.findById(decoded.id);
+    // ✅ FIND USER
+    const user = await User.findById(decoded.id).select("+twoFactorSecret");
 
     if (!user) {
+      console.error("❌ User not found:", decoded.id);
       return NextResponse.json(
-        { success: false, message: "Admin not found" },
+        { success: false, message: "User not found" },
         { status: 404 }
       );
     }
 
-    // ✅ CHECK OTP
-    if (
-      !user.adminOTP ||
-      !user.adminOTPExpires ||
-      user.adminOTP !== otp ||
-      new Date(user.adminOTPExpires) < new Date()
-    ) {
+    console.log("👤 User found:", user.email);
+    console.log("🔐 2FA Enabled:", user.twoFactorEnabled);
+    console.log("🔐 Has Secret:", !!user.twoFactorSecret);
+
+    // ✅ CHECK 2FA CONFIGURATION
+    if (!user.twoFactorEnabled) {
+      console.error("❌ 2FA not enabled");
+      return NextResponse.json(
+        { success: false, message: "2FA not enabled for this account" },
+        { status: 401 }
+      );
+    }
+
+    if (!user.twoFactorSecret) {
+      console.error("❌ 2FA secret missing");
+      return NextResponse.json(
+        { success: false, message: "2FA not configured properly" },
+        { status: 401 }
+      );
+    }
+
+    // ✅ VERIFY GOOGLE AUTHENTICATOR OTP
+    console.log("🔍 Verifying OTP...");
+    
+    const verified = speakeasy.totp.verify({
+      secret: String(user.twoFactorSecret),
+      encoding: 'base32',
+      token: otp.trim(),
+      window: 2
+    });
+
+    console.log("🔍 Verification result:", verified);
+
+    if (!verified) {
+      console.error("❌ Invalid OTP");
       return NextResponse.json(
         { success: false, message: "Invalid or expired OTP" },
         { status: 401 }
       );
     }
 
-    // ✅ CLEAR OTP
-    user.adminOTP = undefined;
-    user.adminOTPExpires = undefined;
-    await user.save();
+    console.log("✅ OTP VERIFIED!");
 
     // ✅ CREATE FINAL LOGIN TOKEN
     const token = jwt.sign(
       {
         id: user._id.toString(),
         email: user.email,
-        role: "admin",
+        role: user.isAdmin ? "admin" : "user",
       },
       process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     );
 
+    console.log("✅ Login token generated");
+
     // ✅ SET AUTH COOKIE
-    const cookieStore = await cookies();
+    const cookieStore = cookies();
     cookieStore.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -88,20 +117,21 @@ export async function POST(req: Request) {
       path: "/",
     });
 
-    console.log("✅ ADMIN LOGIN SUCCESS:", user.email);
+    console.log("✅ 2FA LOGIN SUCCESS:", user.email);
 
     return NextResponse.json({
       success: true,
-      message: "Admin login successful",
+      message: "OTP verification successful",
       user: {
         id: user._id.toString(),
         email: user.email,
         name: user.name,
+        isAdmin: user.isAdmin,
       },
     });
 
   } catch (error: any) {
-    console.error("❌ ADMIN OTP VERIFY ERROR:", error);
+    console.error("❌ OTP VERIFY ERROR:", error);
     return NextResponse.json(
       { success: false, message: "Server error", error: error.message },
       { status: 500 }

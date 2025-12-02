@@ -6,6 +6,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 
 import { 
   getClientIP, 
@@ -279,89 +280,124 @@ export const authOptions: NextAuthOptions = {
   ],
   
  callbacks: {
-  async signIn({ user, account }) {
-    await connectDB();
+ async signIn({ user, account }) {
+  await connectDB();
 
-    try {
-      let existingUser = await User.findOne({ email: user.email });
+  try {
+    let existingUser = await User.findOne({ email: user.email });
 
-      if (!existingUser) {
-        const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-        const currentIP = await getClientIP();
-        const currentLocation = await getLocationFromIP(currentIP);
+    // ✅ CREATE USER IF NOT EXISTS (OAUTH)
+    if (!existingUser) {
+      const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const currentIP = await getClientIP();
+      const currentLocation = await getLocationFromIP(currentIP);
 
-        existingUser = await User.create({
-          name: user.name,
-          email: user.email,
-          emailVerified: true,
-          referralCode,
-
-          // ✅ SAFE REFERRAL DEFAULT
-          referredBy: null,
-
-          walletBalance: 0,
-          totalDeposits: 0,
-          levelIncome: 0,
-          referralEarnings: 0,
-          referralCount: 0,
-          level1: [],
-          level2: [],
-          level3: [],
-          registrationIP: currentIP,
-          registrationLocation: currentLocation,
-          ipAddress: currentIP,
-          currentLocation: currentLocation,
-          loginHistory: [],
-          devices: [],
-          securityAlerts: [],
-          loginStats: {
-            totalLogins: 1,
-            failedAttempts: 0,
-            uniqueDevices: 1,
-            uniqueLocations: 1
-          }
-        });
-
-        console.log(`✅ New OAuth user created: ${user.email}`);
-      }
-
-      if (existingUser?.isBanned) {
-        console.log("🚫 Banned user blocked safely");
-        return false;
-      }
-
-      if (account?.provider) {
-        await trackUserLogin(existingUser, account.provider);
-      }
-
-      if (!existingUser.emailVerified) {
-        existingUser.emailVerified = true;
-        await existingUser.save();
-      }
-
-      return true;
-    } catch (err) {
-      console.error("❌ OAuth SignIn Error:", err);
-      return true;
+      existingUser = await User.create({
+        name: user.name,
+        email: user.email,
+        emailVerified: true,
+        referralCode,
+        referredBy: null,
+        walletBalance: 0,
+        totalDeposits: 0,
+        levelIncome: 0,
+        referralEarnings: 0,
+        referralCount: 0,
+        level1: [],
+        level2: [],
+        level3: [],
+        registrationIP: currentIP,
+        registrationLocation: currentLocation,
+        ipAddress: currentIP,
+        currentLocation: currentLocation,
+        loginHistory: [],
+        devices: [],
+        securityAlerts: [],
+        loginStats: {
+          totalLogins: 1,
+          failedAttempts: 0,
+          uniqueDevices: 1,
+          uniqueLocations: 1,
+        }
+      });
     }
-  },  // ✅ ✅ ✅ YE COMMA SAB KUCH FIX KARTA HAI
 
-  async jwt({ token, user, account }) {
-    if (user) {
-      await connectDB();
-      const dbUser = await User.findOne({ email: user.email });
-
-      if (dbUser) {
-        token.id = dbUser._id.toString();
-        token.email = dbUser.email;
-        token.role = dbUser.isAdmin ? "admin" : "user";
-        token.isAdmin = dbUser.isAdmin || false;
-        token.provider = account?.provider || "credentials";
-      }
+    // ✅ BLOCK BANNED USER
+    if (existingUser?.isBanned) {
+      return false;
     }
+
+    // ✅ TRACK LOGIN
+    if (account?.provider) {
+      await trackUserLogin(existingUser, account.provider);
+    }
+
+
+ 
+
+    // ✅ FORCE EMAIL VERIFIED
+    if (!existingUser.emailVerified) {
+      existingUser.emailVerified = true;
+      await existingUser.save();
+    }
+
+    // 🔐 ✅✅✅ **FORCE 2FA ON GOOGLE + EMAIL**
+if (existingUser.twoFactorEnabled) {
+
+      // ✅ GENERATE OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      existingUser.adminOTP = otp;
+      existingUser.adminOTPExpires = new Date(Date.now() + 5 * 60 * 1000);
+      await existingUser.save();
+
+      // ✅ CREATE TEMP TOKEN
+      const tempToken = jwt.sign(
+        {
+          id: existingUser._id.toString(),
+          temp: true,
+          purpose: "user-2fa",
+        },
+        process.env.JWT_SECRET!,
+        { expiresIn: "5m" }
+      );
+
+      // ❌ FINAL LOGIN ROK DO — OTP KE BAGHAIR DASHBOARD NA JAYE
+      return `/auth/verify-otp?tempToken=${tempToken}`;
+    }
+
+    // ✅ AGAR 2FA OFF HAI TO NORMAL LOGIN
+    return true;
+
+  } catch (err) {
+    console.error("❌ OAuth SignIn Error:", err);
+    return false;
+  }
+},
+
+
+ async jwt({ token, user, account }) {
+
+  // ✅ OTP ke baghair full session block
+  if (token.temp === true) {
     return token;
-  },
+  }
 
+  if (user) {
+    await connectDB();
+    const dbUser = await User.findOne({ email: user.email });
+
+    if (dbUser) {
+      token.id = dbUser._id.toString();
+      token.email = dbUser.email;
+      token.role = dbUser.isAdmin ? "admin" : "user";
+      token.isAdmin = dbUser.isAdmin || false;
+      token.provider = account?.provider || "credentials";
+    }
+  }
+
+  return token;
+},
   async session({ session, token }) {
     if (token && session.user) {
       (session.user as any).id = token.id;
