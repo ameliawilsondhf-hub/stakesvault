@@ -1,6 +1,3 @@
-// ✅ FILE: /app/api/auth/[...nextauth]/route.ts
-// COMPLETE 2FA IMPLEMENTATION - NO BYPASS
-
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import FacebookProvider from "next-auth/providers/facebook";
@@ -8,6 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 
 import { 
@@ -18,7 +16,7 @@ import {
   createSecurityAlert
 } from "@/lib/security";
 
-// Track login function (same as yours)
+// 🔥 UPDATED: Track login with optional client device info
 async function trackUserLogin(
   user: any, 
   provider: string = 'credentials',
@@ -28,6 +26,7 @@ async function trackUserLogin(
     const currentIP = await getClientIP();
     const currentLocation = await getLocationFromIP(currentIP);
     
+    // 🔥 Use client info if available, otherwise use generic
     const browser = clientDeviceInfo?.browser || `${provider} Browser`;
     const os = clientDeviceInfo?.os || `${provider} OS`;
     const device = clientDeviceInfo?.device || `${os} ${browser}`;
@@ -38,11 +37,13 @@ async function trackUserLogin(
     const previousIP = user.ipAddress || "";
     const previousLocation = user.currentLocation || "";
 
+    // Initialize arrays
     user.loginHistory = user.loginHistory || [];
     user.devices = user.devices || [];
     user.loginIPs = user.loginIPs || [];
     user.securityAlerts = user.securityAlerts || [];
 
+    // Check suspicious activity
     const suspiciousCheck = isSuspiciousLogin({
       currentIP,
       previousIP,
@@ -52,6 +53,7 @@ async function trackUserLogin(
       devices: user.devices
     });
 
+    // Add login history
     (user.loginHistory as any).push({
       ip: currentIP,
       location: currentLocation,
@@ -63,10 +65,12 @@ async function trackUserLogin(
       suspicious: suspiciousCheck.suspicious
     });
 
+    // Keep last 50 records
     if (user.loginHistory.length > 50) {
       user.loginHistory = user.loginHistory.slice(-50);
     }
 
+    // Check if device exists
     const existingDevice = user.devices.find(d => d.deviceId === deviceFingerprint);
 
     if (existingDevice) {
@@ -77,6 +81,7 @@ async function trackUserLogin(
       existingDevice.os = os;
       existingDevice.name = device;
     } else {
+      // New device
       (user.devices as any).push({
         name: device,
         deviceId: deviceFingerprint,
@@ -84,11 +89,12 @@ async function trackUserLogin(
         os: os,
         lastUsed: new Date(),
         firstSeen: new Date(),
-        trusted: provider !== 'credentials',
+        trusted: provider !== 'credentials', // OAuth auto-trusted
         ipAddress: currentIP,
         location: currentLocation
       });
 
+      // Alert for new device
       const alert = createSecurityAlert({
         type: 'new_device',
         ip: currentIP,
@@ -100,6 +106,7 @@ async function trackUserLogin(
       (user.securityAlerts as any).push(alert);
     }
 
+    // Update IP tracking
     const existingIP = user.loginIPs.find(i => i.ip === currentIP);
     if (existingIP) {
       existingIP.count += 1;
@@ -111,6 +118,7 @@ async function trackUserLogin(
         count: 1
       });
 
+      // Alert for new IP
       if (previousIP) {
         const alert = createSecurityAlert({
           type: 'ip_change',
@@ -123,6 +131,7 @@ async function trackUserLogin(
       }
     }
 
+    // Check location change
     if (previousLocation && currentLocation !== previousLocation) {
       const prevCountry = previousLocation.split(',')[1]?.trim();
       const currCountry = currentLocation.split(',')[1]?.trim();
@@ -139,6 +148,7 @@ async function trackUserLogin(
       }
     }
 
+    // Check multiple devices
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const recentLogins = user.loginHistory.filter(
       (login: any) => new Date(login.timestamp) > fiveMinutesAgo
@@ -158,17 +168,20 @@ async function trackUserLogin(
       }
     }
 
+    // Update registration info (first time)
     if (!user.registrationIP) {
       user.registrationIP = currentIP;
       user.registrationLocation = currentLocation;
     }
 
+    // Update current status
     user.previousIP = previousIP;
     user.previousLocation = previousLocation;
     user.ipAddress = currentIP;
     user.currentLocation = currentLocation;
     user.lastLogin = new Date();
 
+    // Update login stats
     user.loginStats = user.loginStats || {
       totalLogins: 0,
       failedAttempts: 0,
@@ -180,6 +193,7 @@ async function trackUserLogin(
     user.loginStats.uniqueDevices = user.devices.length;
     user.loginStats.uniqueLocations = new Set(user.loginHistory.map((l: any) => l.location)).size;
 
+    // Add security log if suspicious
     if (suspiciousCheck.suspicious) {
       user.securityLogs = user.securityLogs || [];
       (user.securityLogs as any).push({
@@ -192,6 +206,7 @@ async function trackUserLogin(
       });
     }
 
+    // Keep last 100 alerts
     if (user.securityAlerts.length > 100) {
       user.securityAlerts = user.securityAlerts.slice(-100);
     }
@@ -227,8 +242,7 @@ export const authOptions: NextAuthOptions = {
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-        otp: { label: "OTP", type: "text" }, // ✅ 2FA OTP field
+        password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -253,54 +267,6 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // ✅ 2FA CHECK FOR CREDENTIALS LOGIN
-        if (user.twoFactorEnabled) {
-          // If OTP provided, verify it
-          if (credentials.otp) {
-            if (!user.adminOTP || !user.adminOTPExpires) {
-              throw new Error("2FA_OTP_EXPIRED");
-            }
-
-            if (new Date() > user.adminOTPExpires) {
-              throw new Error("2FA_OTP_EXPIRED");
-            }
-
-            if (user.adminOTP !== credentials.otp) {
-              throw new Error("2FA_INVALID_OTP");
-            }
-
-            // ✅ OTP Valid - Clear it
-            user.adminOTP = undefined;
-            user.adminOTPExpires = undefined;
-            await user.save();
-
-            // ✅ Track login after 2FA success
-            await trackUserLogin(user, 'credentials');
-
-            return {
-              id: user._id?.toString() || String(user._id),
-              email: user.email,
-              name: user.name,
-              isAdmin: user.isAdmin || false,
-            };
-          } else {
-            // ✅ No OTP provided - Generate and send OTP
-            const otp = Math.floor(100000 + Math.random() * 900000).toString();
-            
-            user.adminOTP = otp;
-            user.adminOTPExpires = new Date(Date.now() + 5 * 60 * 1000);
-            await user.save();
-
-            console.log(`🔐 2FA OTP Generated for ${user.email}: ${otp}`);
-
-            // TODO: Send OTP via email
-            // await emailService.send2FAOTP(user.email, user.name, otp);
-
-            throw new Error("2FA_REQUIRED");
-          }
-        }
-
-        // ✅ No 2FA - Normal login
         await trackUserLogin(user, 'credentials');
 
         return {
@@ -313,137 +279,145 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   
-  callbacks: {
-    async signIn({ user, account }) {
-      await connectDB();
+ callbacks: {
+ async signIn({ user, account }) {
+  await connectDB();
 
-      try {
-        let existingUser = await User.findOne({ email: user.email });
+  try {
+    let existingUser = await User.findOne({ email: user.email });
 
-        // ✅ CREATE USER IF NOT EXISTS (OAUTH)
-        if (!existingUser) {
-          const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-          const currentIP = await getClientIP();
-          const currentLocation = await getLocationFromIP(currentIP);
+    // ✅ CREATE USER IF NOT EXISTS (OAUTH)
+    if (!existingUser) {
+      const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const currentIP = await getClientIP();
+      const currentLocation = await getLocationFromIP(currentIP);
 
-          existingUser = await User.create({
-            name: user.name,
-            email: user.email,
-            emailVerified: true,
-            referralCode,
-            referredBy: null,
-            walletBalance: 0,
-            totalDeposits: 0,
-            levelIncome: 0,
-            referralEarnings: 0,
-            referralCount: 0,
-            level1: [],
-            level2: [],
-            level3: [],
-            registrationIP: currentIP,
-            registrationLocation: currentLocation,
-            ipAddress: currentIP,
-            currentLocation: currentLocation,
-            loginHistory: [],
-            devices: [],
-            securityAlerts: [],
-            loginStats: {
-              totalLogins: 1,
-              failedAttempts: 0,
-              uniqueDevices: 1,
-              uniqueLocations: 1,
-            }
-          });
+      existingUser = await User.create({
+        name: user.name,
+        email: user.email,
+        emailVerified: true,
+        referralCode,
+        referredBy: null,
+        walletBalance: 0,
+        totalDeposits: 0,
+        levelIncome: 0,
+        referralEarnings: 0,
+        referralCount: 0,
+        level1: [],
+        level2: [],
+        level3: [],
+        registrationIP: currentIP,
+        registrationLocation: currentLocation,
+        ipAddress: currentIP,
+        currentLocation: currentLocation,
+        loginHistory: [],
+        devices: [],
+        securityAlerts: [],
+        loginStats: {
+          totalLogins: 1,
+          failedAttempts: 0,
+          uniqueDevices: 1,
+          uniqueLocations: 1,
         }
-
-        // ✅ BLOCK BANNED USER
-        if (existingUser?.isBanned) {
-          return false;
-        }
-
-        // ✅ FORCE EMAIL VERIFIED FOR OAUTH
-        if (!existingUser.emailVerified && account?.provider !== 'credentials') {
-          existingUser.emailVerified = true;
-          await existingUser.save();
-        }
-
-        // 🔐 2FA CHECK FOR OAUTH (Google/Facebook)
-        if (existingUser.twoFactorEnabled && account?.provider !== 'credentials') {
-          console.log(`🔐 2FA Required for OAuth: ${existingUser.email}`);
-
-          // ✅ GENERATE OTP
-          const otp = Math.floor(100000 + Math.random() * 900000).toString();
-          
-          existingUser.adminOTP = otp;
-          existingUser.adminOTPExpires = new Date(Date.now() + 5 * 60 * 1000);
-          await existingUser.save();
-
-          console.log(`📧 2FA OTP for ${existingUser.email}: ${otp}`);
-
-          // TODO: Send email
-          // await emailService.send2FAOTP(existingUser.email, existingUser.name, otp);
-
-          // ✅ Block signin - User needs to verify OTP
-          return `/auth/verify-2fa?email=${encodeURIComponent(existingUser.email)}`;
-        }
-
-        // ✅ NO 2FA - Track and allow
-        if (account?.provider) {
-          await trackUserLogin(existingUser, account.provider);
-        }
-
-        return true;
-
-      } catch (err: any) {
-        console.error("❌ SignIn Error:", err);
-        return false;
-      }
-    },
-
-    async jwt({ token, user, account }) {
-      if (user) {
-        await connectDB();
-        const dbUser = await User.findOne({ email: user.email });
-
-        if (dbUser) {
-          token.id = dbUser._id.toString();
-          token.email = dbUser.email;
-          token.role = dbUser.isAdmin ? "admin" : "user";
-          token.isAdmin = dbUser.isAdmin || false;
-          token.provider = account?.provider || "credentials";
-        }
-      }
-
-      return token;
-    },
-
-    async session({ session, token }) {
-      if (token && session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).email = token.email;
-        (session.user as any).role = token.role;
-        (session.user as any).isAdmin = token.isAdmin;
-        (session.user as any).provider = token.provider;
-      }
-      return session;
-    },
-
-    async redirect({ url, baseUrl }) {
-      // ✅ Check for 2FA redirect
-      if (url.startsWith('/auth/verify-2fa')) {
-        return url;
-      }
-
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      
-      try {
-        const urlObj = new URL(url);
-        if (urlObj.origin === baseUrl) return url;
-      } catch {}
-      
-      return `${baseUrl}/dashboard`;
+      });
     }
+
+    // ✅ BLOCK BANNED USER
+    if (existingUser?.isBanned) {
+      return false;
+    }
+
+    // ✅ TRACK LOGIN
+    if (account?.provider) {
+      await trackUserLogin(existingUser, account.provider);
+    }
+
+
+ 
+
+    // ✅ FORCE EMAIL VERIFIED
+    if (!existingUser.emailVerified) {
+      existingUser.emailVerified = true;
+      await existingUser.save();
+    }
+
+    // 🔐 ✅✅✅ **FORCE 2FA ON GOOGLE + EMAIL**
+if (existingUser.twoFactorEnabled) {
+
+      // ✅ GENERATE OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      existingUser.adminOTP = otp;
+      existingUser.adminOTPExpires = new Date(Date.now() + 5 * 60 * 1000);
+      await existingUser.save();
+
+      // ✅ CREATE TEMP TOKEN
+      const tempToken = jwt.sign(
+        {
+          id: existingUser._id.toString(),
+          temp: true,
+          purpose: "user-2fa",
+        },
+        process.env.JWT_SECRET!,
+        { expiresIn: "5m" }
+      );
+
+      // ❌ FINAL LOGIN ROK DO — OTP KE BAGHAIR DASHBOARD NA JAYE
+      return `/auth/verify-otp?tempToken=${tempToken}`;
+    }
+
+    // ✅ AGAR 2FA OFF HAI TO NORMAL LOGIN
+    return true;
+
+  } catch (err) {
+    console.error("❌ OAuth SignIn Error:", err);
+    return false;
+  }
+},
+
+
+ async jwt({ token, user, account }) {
+
+  // ✅ OTP ke baghair full session block
+  if (token.temp === true) {
+    return token;
+  }
+
+  if (user) {
+    await connectDB();
+    const dbUser = await User.findOne({ email: user.email });
+
+    if (dbUser) {
+      token.id = dbUser._id.toString();
+      token.email = dbUser.email;
+      token.role = dbUser.isAdmin ? "admin" : "user";
+      token.isAdmin = dbUser.isAdmin || false;
+      token.provider = account?.provider || "credentials";
+    }
+  }
+
+  return token;
+},
+  async session({ session, token }) {
+    if (token && session.user) {
+      (session.user as any).id = token.id;
+      (session.user as any).email = token.email;
+      (session.user as any).role = token.role;
+      (session.user as any).isAdmin = token.isAdmin;
+      (session.user as any).provider = token.provider;
+    }
+    return session;
   },
+
+  async redirect({ url, baseUrl }) {
+    if (url.startsWith("/")) return `${baseUrl}${url}`;
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.origin === baseUrl) return url;
+    } catch {}
+    return `${baseUrl}/dashboard`;
+  }
+},
 
   pages: {
     signIn: "/auth/login",
@@ -455,20 +429,6 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60,
-  },
-
-  cookies: {
-    sessionToken: {
-      name: process.env.NODE_ENV === 'production' 
-        ? '__Secure-next-auth.session-token'
-        : 'next-auth.session-token',
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-      }
-    }
   },
 
   debug: process.env.NODE_ENV === "development",
