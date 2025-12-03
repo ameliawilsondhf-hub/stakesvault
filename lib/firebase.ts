@@ -1,5 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, initializeFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // ← ADDED FOR QR UPLOAD
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -38,5 +39,8 @@ try {
   }
 }
 
-export { app, db };
+// ✅ Initialize Firebase Storage
+const storage = getStorage(app);
+
+export { app, db, storage };
 export default db;

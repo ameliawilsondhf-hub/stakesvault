@@ -20,6 +20,7 @@ const DepositPage = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [qrImageError, setQrImageError] = useState(false);
 
   useEffect(() => {
     fetchDepositConfig();
@@ -27,14 +28,21 @@ const DepositPage = () => {
 
   const fetchDepositConfig = async () => {
     try {
-      const response = await fetch('/api/settings/get');
+      const response = await fetch('/api/settings/get', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
       const data = await response.json();
       if (data.success) {
         setConfig(data.settings);
+        console.log("✅ Deposit config loaded:", data.settings);
       } else {
         setError(data.message || "Unable to load settings");
       }
     } catch (err) {
+      console.error("❌ Config fetch error:", err);
       setError("Error loading deposit information");
     } finally {
       setLoading(false);
@@ -75,11 +83,30 @@ const DepositPage = () => {
     }
 
     setSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      setSubmitSuccess(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('amount', amount);
+      formData.append('screenshot', proofFile);
+
+      const response = await fetch('/api/deposit/submit', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSubmitSuccess(true);
+      } else {
+        alert(data.message || 'Failed to submit deposit');
+        setSubmitting(false);
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      alert('Error submitting deposit request');
       setSubmitting(false);
-    }, 1500);
+    }
   };
 
   if (loading) {
@@ -141,20 +168,48 @@ const DepositPage = () => {
           </div>
         </div>
 
-        {/* QR Code */}
+        {/* QR Code - FIXED VERSION */}
         <div className="bg-white rounded-lg p-4 shadow-sm">
           <p className="text-xs text-gray-500 mb-3 text-center">Scan QR Code</p>
           <div className="flex justify-center mb-3">
-            <img 
-              src={config.qrImage} 
-              alt="QR" 
-              className="w-48 h-48 rounded-lg border border-gray-200"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = "https://placehold.co/400x400/e5e7eb/6b7280?text=QR";
-              }}
-            />
+            {!qrImageError && config.qrImage ? (
+              <img 
+                src={config.qrImage} 
+                alt="Deposit QR Code" 
+                className="w-48 h-48 rounded-lg border border-gray-200 bg-white object-contain"
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+                loading="eager"
+                onLoad={() => {
+                  console.log("✅ QR Code loaded successfully");
+                  setQrImageError(false);
+                }}
+                onError={(e) => {
+                  console.error("❌ QR Code failed to load:", config.qrImage);
+                  const target = e.target as HTMLImageElement;
+                  setQrImageError(true);
+                  target.onerror = null;
+                  target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='45%25' text-anchor='middle' fill='%236b7280' font-size='18' font-weight='bold'%3EQR Code%3C/text%3E%3Ctext x='50%25' y='55%25' text-anchor='middle' fill='%239ca3af' font-size='14'%3ENot Available%3C/text%3E%3C/svg%3E";
+                }}
+              />
+            ) : (
+              <div className="w-48 h-48 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                  <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500 text-xs">QR Code</p>
+                  <p className="text-gray-400 text-xs">Not Available</p>
+                </div>
+              </div>
+            )}
           </div>
+          
+          {qrImageError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-3">
+              <p className="text-xs text-red-600 text-center">
+                ⚠️ QR code couldn't load. Please use the address below.
+              </p>
+            </div>
+          )}
           
           {/* Address */}
           <div className="bg-gray-50 rounded-lg p-3">
@@ -165,11 +220,14 @@ const DepositPage = () => {
               </p>
               <button
                 onClick={() => copyToClipboard(config.depositAddress)}
-                className="flex-shrink-0 bg-blue-600 text-white px-3 py-2 rounded text-xs font-medium active:bg-blue-700"
+                className="flex-shrink-0 bg-blue-600 text-white px-3 py-2 rounded text-xs font-medium active:bg-blue-700 hover:bg-blue-700 transition-colors"
               >
                 {copyStatus ? '✓' : <Copy className="w-3.5 h-3.5" />}
               </button>
             </div>
+            {copyStatus && (
+              <p className="text-xs text-green-600 mt-1">✓ Address copied!</p>
+            )}
           </div>
         </div>
 
@@ -199,7 +257,7 @@ const DepositPage = () => {
           </label>
           
           {!previewUrl ? (
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 bg-gray-50">
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 bg-gray-50 transition-colors">
               <Upload className="w-8 h-8 text-gray-400 mb-2" />
               <span className="text-sm text-gray-600">Upload Screenshot</span>
               <span className="text-xs text-gray-400 mt-1">PNG, JPG (Max 5MB)</span>
@@ -214,7 +272,7 @@ const DepositPage = () => {
             <div className="relative">
               <img 
                 src={previewUrl} 
-                alt="Proof" 
+                alt="Payment Proof" 
                 className="w-full h-40 object-cover rounded-lg border border-gray-200"
               />
               <button
@@ -222,7 +280,7 @@ const DepositPage = () => {
                   setProofFile(null);
                   setPreviewUrl(null);
                 }}
-                className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-lg font-bold"
+                className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-lg font-bold"
               >
                 ×
               </button>
@@ -244,11 +302,11 @@ const DepositPage = () => {
       </div>
 
       {/* Fixed Bottom Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
         <button
           onClick={handleSubmit}
           disabled={submitting || !amount || !proofFile}
-          className="w-full bg-blue-600 text-white font-semibold py-3.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed active:bg-blue-700 flex items-center justify-center gap-2"
+          className="w-full bg-blue-600 text-white font-semibold py-3.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed active:bg-blue-700 hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors"
         >
           {submitting ? (
             <>

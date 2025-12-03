@@ -1,57 +1,63 @@
-import { NextRequest } from "next/server";
-import connectDB from "@/lib/mongodb";
-import Settings from "@/lib/models/settings";
-import { writeFile } from "fs/promises";
-import path from "path";
+import { NextRequest, NextResponse } from "next/server";
+import { initializeApp, getApps } from "firebase/app";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+};
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
+    const body = await req.json();
+    const { depositAddress, minDeposit, network } = body;
 
-    const form = await req.formData();
-    const depositAddress = form.get("depositAddress") as string;
-
-    let qrImageUrl = "";
-
-    // 🟦 Get File
-    const file = form.get("qrImage") as unknown as File;
-
-    if (file && file.size > 0) {
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-
-      // 🟦 EXTENSION AUTO DETECT (.jpg / .png)
-      const ext = file.type === "image/png" ? ".png" : ".jpg";
-
-      // 🟦 AUTO RENAME
-      const fileName = Date.now() + "-qr" + ext;
-
-      const uploadDir = path.join(process.cwd(), "public", "uploads");
-      const filePath = path.join(uploadDir, fileName);
-
-      await writeFile(filePath, buffer);
-
-      qrImageUrl = "/uploads/" + fileName;
+    if (!depositAddress || !minDeposit || !network) {
+      return NextResponse.json(
+        { success: false, message: "All fields are required" },
+        { status: 400 }
+      );
     }
 
-    let s = await Settings.findOne();
+const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(depositAddress)}`;
 
-    if (!s) {
-      s = await Settings.create({
+    const app =
+      getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+
+    const db = getFirestore(app);
+
+    // ✅ ✅ ✅ EXACT SAME PATH AS GET
+    const ref = doc(db, "data", "settings", "deposit_config");
+
+    await setDoc(
+      ref,
+      {
         depositAddress,
-        qrImage: qrImageUrl || "",
-      });
-    } else {
-      s.depositAddress = depositAddress;
-      if (qrImageUrl) s.qrImage = qrImageUrl;
-      await s.save();
-    }
+        minDeposit: Number(minDeposit),
+        network,
+        qrImage,
+      },
+      { merge: true }
+    );
 
-    return Response.json({ success: true });
-  } catch (err: unknown) {
-    return Response.json({
-      success: false,
-      error: err instanceof Error ? err.message : String(err),
+    return NextResponse.json({
+      success: true,
+      message: "Deposit settings updated successfully",
     });
+  } catch (error: any) {
+    console.error("🔥 SETTINGS UPDATE FAILED:", error.message);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Settings update failed",
+        error: error.message,
+      },
+      { status: 500 }
+    );
   }
 }

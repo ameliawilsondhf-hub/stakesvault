@@ -41,7 +41,7 @@ function getClientIP(request: NextRequest): string {
 }
 
 // -------------------------------
-// 🔒 SECURITY HEADERS
+// 🔒 SECURITY HEADERS (✅ FIXED CSP)
 // -------------------------------
 function addSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set("X-Frame-Options", "DENY");
@@ -52,9 +52,20 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=()"
   );
+
+  // ✅ FIXED: Allow images from external sources and data URIs
   response.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https: http: blob:; " + // ✅ Allows all images
+    "font-src 'self' data: https://cdnjs.cloudflare.com; " +
+    "connect-src 'self' https:; " +
+    "media-src 'self' https: data:; " +
+    "object-src 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self';"
   );
 
   return response;
@@ -116,15 +127,13 @@ const PROTECTED_ROUTES: RouteConfig[] = [
   { path: "/referrals", minRole: UserRole.USER },
   { path: "/settings", minRole: UserRole.USER },
 
-  // Admin routes (UI only, not API)
+  // Admin routes (UI only)
   {
     path: "/admin",
     minRole: UserRole.ADMIN,
     rateLimit: { max: 50, window: 60000 },
   },
 
-  // ✅ REMOVED /api/admin from middleware - APIs handle their own auth
-  
   // Super admin routes
   { path: "/super-admin", minRole: UserRole.SUPER_ADMIN },
 ];
@@ -144,8 +153,7 @@ const PUBLIC_ROUTES = [
   "/_next",
   "/favicon.ico",
   "/api/health",
-  // ✅ CRITICAL: Allow admin API routes to handle their own auth
-  "/api/admin", 
+  "/api/admin", // ✅ Admin APIs handle their own auth
   "/api/super-admin",
 ];
 
@@ -202,7 +210,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApiRoute = pathname.startsWith("/api");
 
-  // ✅ CRITICAL: Allow public routes (including /api/admin)
+  // Allow public routes
   if (isPublicRoute(pathname)) {
     const response = NextResponse.next();
     return addSecurityHeaders(response);

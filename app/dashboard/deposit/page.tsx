@@ -23,6 +23,7 @@ const DepositPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [imageLoadError, setImageLoadError] = useState(false);
 
   useEffect(() => {
     fetchDepositConfig();
@@ -30,14 +31,22 @@ const DepositPage = () => {
 
   const fetchDepositConfig = async () => {
     try {
+      console.log('🔄 Fetching deposit config...');
       const response = await fetch('/api/settings/get');
       const data = await response.json();
+      
+      console.log('📦 API Response:', data);
+      
       if (data.success) {
+        console.log('✅ Config loaded:', data.settings);
+        console.log('🖼️ QR Image URL:', data.settings.qrImage);
         setConfig(data.settings);
       } else {
+        console.error('❌ API Error:', data.message);
         setError(data.message || "Unable to load settings");
       }
     } catch (err) {
+      console.error('❌ Fetch Error:', err);
       setError("Error loading deposit information");
     } finally {
       setLoading(false);
@@ -192,46 +201,54 @@ const DepositPage = () => {
           </div>
         </div>
 
-        {/* QR Code Section */}
-        <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100">
-          <div className="flex justify-center mb-4">
-            <div className="p-3 bg-gray-50 rounded-2xl border-2 border-gray-200">
-              <img 
-                src={config.qrImage} 
-                alt="QR" 
-                className="w-44 h-44 rounded-xl"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = "https://placehold.co/400x400/e5e7eb/6b7280?text=QR";
-                }}
-              />
-            </div>
-          </div>
-          
-          {/* Address with Professional Copy */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
-            <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
-              Deposit Address
-            </p>
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-mono text-gray-800 flex-1 break-all leading-relaxed">
-                {config.depositAddress}
-              </p>
-              <button
-                onClick={() => copyToClipboard(config.depositAddress)}
-                className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                  copyStatus 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                {copyStatus ? '✓ Copied' : 'Copy'}
-              </button>
-            </div>
-          </div>
+       {/* QR Code Section */}
+<div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100">
+  <div className="flex justify-center mb-4">
+    <div className="p-3 bg-gray-50 rounded-2xl border-2 border-gray-200">
+      {config.qrImage ? (
+        <img 
+          src={config.qrImage} 
+          alt="Deposit QR Code" 
+          className="w-44 h-44 rounded-xl object-contain"
+          referrerPolicy="no-referrer"
+          onLoad={() => console.log('✅ QR Image loaded')}
+          onError={(e) => {
+            console.error('❌ QR Image failed to load');
+            const target = e.target as HTMLImageElement;
+            target.src = "https://placehold.co/400x400/e5e7eb/6b7280?text=QR+Code";
+          }}
+        />
+      ) : (
+        <div className="w-44 h-44 bg-gray-100 rounded-xl flex items-center justify-center">
+          <p className="text-xs text-gray-500">No QR Code</p>
         </div>
-
+      )}
+    </div>
+  </div>
+  
+  {/* Address with Professional Copy */}
+  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
+    <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+      <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+      Deposit Address
+    </p>
+    <div className="flex items-center gap-2">
+      <p className="text-xs font-mono text-gray-800 flex-1 break-all leading-relaxed">
+        {config.depositAddress}
+      </p>
+      <button
+        onClick={() => copyToClipboard(config.depositAddress)}
+        className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
+          copyStatus 
+            ? 'bg-green-500 text-white' 
+            : 'bg-blue-600 text-white hover:bg-blue-700'
+        }`}
+      >
+        {copyStatus ? '✓ Copied' : 'Copy'}
+      </button>
+    </div>
+  </div>
+</div>
         {/* Amount Input */}
         <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100">
           <label className="text-sm font-bold text-gray-800 mb-3 block flex items-center gap-2">

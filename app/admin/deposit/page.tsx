@@ -36,8 +36,7 @@ export default function AdminDepositPage() {
     try {
       const res = await fetch("/api/admin/deposit/list", { 
         cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-        credentials: "include" // ✅ ADDED FOR CONSISTENCY
+        headers: { "Cache-Control": "no-cache" }
       });
       
       if (!res.ok) {
@@ -64,6 +63,28 @@ export default function AdminDepositPage() {
     }
   };
 
+  // ✅ Helper function to format image source
+  const getImageSrc = (screenshot: string | null): string => {
+    if (!screenshot) return "";
+    
+    // If already a data URL, return as is
+    if (screenshot.startsWith('data:')) {
+      return screenshot;
+    }
+    
+    // If it's a URL (http/https), return as is
+    if (screenshot.startsWith('http')) {
+      return screenshot;
+    }
+    
+    // If it's a base64 string without data prefix, add it
+    if (screenshot.length > 100 && !screenshot.includes('://')) {
+      return `data:image/jpeg;base64,${screenshot}`;
+    }
+    
+    return screenshot;
+  };
+
   const approveDeposit = async (id: string) => {
     if (processing) return;
     
@@ -73,11 +94,9 @@ export default function AdminDepositPage() {
     setProcessing(id);
     
     try {
-      // ✅✅✅ CRITICAL FIX: Added credentials: "include"
       const res = await fetch("/api/admin/deposit/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // ✅ THIS WAS MISSING - NOW FIXED
         body: JSON.stringify({ requestId: id }),
       });
 
@@ -87,13 +106,13 @@ export default function AdminDepositPage() {
         setDeposits((prev) =>
           prev.map((d) => (d._id === id ? { ...d, status: "approved" as const } : d))
         );
-        alert("✅ Deposit approved successfully!");
+        alert("Deposit approved successfully!");
       } else {
         alert(data.message || "Failed to approve deposit");
       }
     } catch (error) {
       console.error("Approve error:", error);
-      alert("Error approving deposit. Please try again.");
+      alert("Error approving deposit");
     } finally {
       setProcessing(null);
       loadData();
@@ -134,11 +153,9 @@ export default function AdminDepositPage() {
     setProcessing(id);
 
     try {
-      // ✅✅✅ CRITICAL FIX: Added credentials: "include"
       const res = await fetch("/api/admin/deposit/reject", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // ✅ THIS WAS MISSING - NOW FIXED
         body: JSON.stringify({ 
           requestId: id,
           reason: reason.trim()
@@ -157,7 +174,7 @@ export default function AdminDepositPage() {
       }
     } catch (error) {
       console.error("Reject error:", error);
-      alert("Error rejecting deposit. Please try again.");
+      alert("Error rejecting deposit");
     } finally {
       setProcessing(null);
       loadData();
@@ -308,7 +325,7 @@ export default function AdminDepositPage() {
                       <td className="px-6 py-4">
                         {deposit.screenshot ? (
                           <button
-                            onClick={() => setSelectedImage(deposit.screenshot)}
+                            onClick={() => setSelectedImage(getImageSrc(deposit.screenshot))}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium"
                           >
                             <Eye className="w-4 h-4" />
@@ -388,7 +405,7 @@ export default function AdminDepositPage() {
         </div>
       </div>
 
-      {/* Image Modal */}
+      {/* Image Modal - ✅ FIXED */}
       {selectedImage && (
         <div
           className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center z-50 p-4 cursor-pointer"
@@ -403,9 +420,10 @@ export default function AdminDepositPage() {
               alt="Payment Proof"
               className="max-w-full max-h-[80vh] mx-auto rounded-xl shadow-2xl"
               onError={(e) => {
+                console.error("❌ Image load error:", selectedImage);
                 const target = e.target as HTMLImageElement;
                 target.onerror = null;
-                target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='white' font-size='18'%3EImage Not Found%3C/text%3E%3C/svg%3E";
+                target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='white' font-size='18'%3EImage Load Failed%3C/text%3E%3C/svg%3E";
               }}
             />
           </div>
