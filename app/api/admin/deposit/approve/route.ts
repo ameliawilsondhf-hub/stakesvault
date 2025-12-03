@@ -1,114 +1,55 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import Deposit from "@/lib/models/deposit";
 import User from "@/lib/models/user";
 import { emailService } from "@/lib/email-service";
-import { headers } from "next/headers";
 
-/**
- * POST /api/admin/deposit/approve
- * 
- * Approve a pending deposit request
- * Features:
- * - Updates user wallet balance
- * - Distributes referral commissions (first deposit only)
- * - Commission Structure: $5, $2.5, $1.25 per $50 deposit
- * - Sends email notifications to all parties
- * - Tracks admin actions
- * 
- * @requires Admin authentication
- * @body { requestId: string }
- * @returns { success, message, data }
- */
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const startTime = Date.now();
-  
+
   try {
     await connectDB();
 
-    // ============================================
-    // 1. AUTHENTICATION & AUTHORIZATION (FIXED)
-    // ============================================
-    const isDevelopment = process.env.NODE_ENV === 'development';
-    let adminId = null;
-    let adminEmail = null;
+    // ✅ ADMIN AUTH USING JWT COOKIE (FINAL FIX)
+    const cookieStore = cookies();
+    const token = cookieStore.get("token")?.value;
 
-    // ✅ FIX: Get session with proper cookie handling
-    const session = await getServerSession(authOptions);
-    
-    // ✅ DEBUG: Log session for troubleshooting
-    console.log("🔍 Session Debug:", {
-      hasSession: !!session,
-      email: session?.user?.email,
-      env: process.env.NODE_ENV,
-      vercel: process.env.VERCEL
-    });
-
-    if (!session?.user?.email) {
-      console.error("❌ No session found or email missing");
+    if (!token) {
+      console.error("❌ No admin token cookie");
       return NextResponse.json(
-        { 
-          success: false,
-          message: "Authentication required. Please login again.",
-          debug: isDevelopment ? {
-            hasSession: !!session,
-            email: session?.user?.email
-          } : undefined
-        },
+        { success: false, message: "Authentication required. Please login again." },
         { status: 401 }
       );
     }
 
-    // ✅ FIX: Find admin user with better error handling
-    const admin = await User.findOne({ 
-      email: session.user.email 
-    }).select('_id email isAdmin name').lean();
-
-    console.log("🔍 Admin Check:", {
-      email: session.user.email,
-      found: !!admin,
-      isAdmin: admin?.isAdmin
-    });
-
-    if (!admin) {
-      console.error("❌ Admin user not found in database");
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (err) {
+      console.error("❌ Invalid token");
       return NextResponse.json(
-        { 
-          success: false,
-          message: "User account not found. Please contact support.",
-          debug: isDevelopment ? {
-            email: session.user.email,
-            userFound: false
-          } : undefined
-        },
-        { status: 404 }
+        { success: false, message: "Session expired. Please login again." },
+        { status: 401 }
       );
     }
 
-    // ✅ FIX: Strict admin check with proper logging
-    if (admin.isAdmin !== true) {
-      console.warn("⚠️ Non-admin user attempted access:", {
-        email: admin.email,
-        isAdmin: admin.isAdmin
-      });
+    const admin = await User.findById(decoded.id).select("_id email isAdmin");
 
+    if (!admin || admin.isAdmin !== true) {
       return NextResponse.json(
-        { 
-          success: false,
-          message: "Admin privileges required to perform this action.",
-          debug: isDevelopment ? {
-            isAdmin: admin.isAdmin,
-            email: admin.email
-          } : undefined
-        },
+        { success: false, message: "Admin privileges required." },
         { status: 403 }
       );
     }
 
-    adminId = admin._id;
-    adminEmail = admin.email;
+    const adminId = admin._id;
+    const adminEmail = admin.email;
+
 
     console.log("✅ Admin authenticated:", adminEmail);
 

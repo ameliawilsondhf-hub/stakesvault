@@ -1,104 +1,55 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 import connectDB from "@/lib/mongodb";
 import Deposit from "@/lib/models/deposit";
 import User from "@/lib/models/user";
 import { emailService } from "@/lib/email-service";
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  console.log("🚀 Deposit Reject API - START");
-  
+  const startTime = Date.now();
+
   try {
     await connectDB();
-    console.log("✅ MongoDB Connected");
 
-    // ============================================
-    // 1. AUTHENTICATION & AUTHORIZATION (FIXED)
-    // ============================================
-    let adminId = null;
-    let adminEmail = null;
+    // ✅ ADMIN AUTH USING JWT COOKIE (FINAL FIX)
+    const cookieStore = cookies();
+    const token = cookieStore.get("token")?.value;
 
-    // ✅ FIX: Get session with proper cookie handling
-    const session = await getServerSession(authOptions);
-    
-    // ✅ DEBUG: Log session for troubleshooting
-    console.log("🔍 Session Debug:", {
-      hasSession: !!session,
-      email: session?.user?.email,
-      env: process.env.NODE_ENV,
-      vercel: process.env.VERCEL
-    });
-
-    if (!session?.user?.email) {
-      console.error("❌ No session found or email missing");
+    if (!token) {
+      console.error("❌ No admin token cookie");
       return NextResponse.json(
-        { 
-          success: false,
-          message: "Authentication required. Please login again.",
-          debug: process.env.NODE_ENV === 'development' ? {
-            hasSession: !!session,
-            email: session?.user?.email
-          } : undefined
-        },
+        { success: false, message: "Authentication required. Please login again." },
         { status: 401 }
       );
     }
 
-    console.log("👤 Session email:", session.user.email);
-
-    // ✅ FIX: Find admin user with better error handling
-    const admin = await User.findOne({ 
-      email: session.user.email 
-    }).select('_id email isAdmin name').lean();
-
-    console.log("🔍 Admin Check:", {
-      email: session.user.email,
-      found: !!admin,
-      isAdmin: admin?.isAdmin,
-      isAdminType: typeof admin?.isAdmin
-    });
-
-    if (!admin) {
-      console.error("❌ Admin user not found in database");
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (err) {
+      console.error("❌ Invalid token");
       return NextResponse.json(
-        { 
-          success: false,
-          message: "User account not found. Please contact support.",
-          debug: process.env.NODE_ENV === 'development' ? {
-            email: session.user.email,
-            userFound: false
-          } : undefined
-        },
-        { status: 404 }
+        { success: false, message: "Session expired. Please login again." },
+        { status: 401 }
       );
     }
 
-    // ✅ FIX: Strict admin check with proper logging
-    if (admin.isAdmin !== true) {
-      console.warn("⚠️ Non-admin user attempted access:", {
-        email: admin.email,
-        isAdmin: admin.isAdmin
-      });
+    const admin = await User.findById(decoded.id).select("_id email isAdmin");
 
+    if (!admin || admin.isAdmin !== true) {
       return NextResponse.json(
-        { 
-          success: false,
-          message: "Admin privileges required to perform this action.",
-          debug: process.env.NODE_ENV === 'development' ? {
-            isAdmin: admin.isAdmin,
-            email: admin.email
-          } : undefined
-        },
+        { success: false, message: "Admin privileges required." },
         { status: 403 }
       );
     }
 
-    adminId = admin._id;
-    adminEmail = admin.email;
+    const adminId = admin._id;
+    const adminEmail = admin.email;
+
 
     console.log("✅ Admin authenticated:", adminEmail);
 
