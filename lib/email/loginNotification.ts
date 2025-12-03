@@ -13,6 +13,19 @@ interface LoginNotificationParams {
   timestamp: Date;
   loginMethod: 'manual' | 'google' | 'facebook';
 }
+// ✅ ADD THIS FUNCTION AFTER LINE 15
+function shouldSkipEmail(email: string): boolean {
+  // Skip custom domains that might have delivery issues
+  const problematicDomains = ['stakevault.com'];
+  const domain = email.split('@')[1];
+  
+  if (problematicDomains.includes(domain)) {
+    console.log(`⚠️ Skipping email to custom domain: ${email}`);
+    return true;
+  }
+  
+  return false;
+}
 
 export async function sendLoginNotification({
   email,
@@ -24,6 +37,12 @@ export async function sendLoginNotification({
   loginMethod,
 }: LoginNotificationParams) {
   try {
+    // ✅ NEW: Skip problematic domains
+    if (shouldSkipEmail(email)) {
+      console.log(`⏭️ Email skipped for: ${email}`);
+      return { success: true, skipped: true };
+    }
+
     console.log(`📧 Sending login notification to ${email}`);
 
     // Format login method
@@ -60,9 +79,36 @@ export async function sendLoginNotification({
     else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) os = 'iOS';
 
     const { data, error } = await resend.emails.send({
-      from: 'StakeVault Security <support@stakesvault.com>',
+      from: 'StakeVault Security <onboarding@resend.dev>',
       to: [email],
       subject: `🔐 New Login Alert - ${new Date().toLocaleDateString()}`,
+      
+      // ✅ NEW: Add plain text version for better deliverability
+      text: `
+StakeVault Security Alert - New Login Detected
+
+Account Information:
+- Name: ${userName}
+- Email: ${email}
+
+Login Details:
+- Time: ${formattedTime}
+- Method: ${methodText}
+- Location: ${location}
+- IP Address: ${ipAddress}
+- Browser: ${browser}
+- System: ${os}
+
+Was This You?
+If this login was authorized by you, no action is needed.
+
+If you don't recognize this activity, please secure your account immediately.
+
+---
+StakeVault Security Team
+© ${new Date().getFullYear()} StakeVault. All rights reserved.
+      `.trim(),
+      
       html: `
 <!DOCTYPE html>
 <html>
@@ -345,18 +391,20 @@ export async function sendLoginNotification({
       `,
     });
 
-    if (error) {
-      console.error("❌ Login notification error:", error);
-      throw new Error(`Email sending failed: ${error.message}`);
+   if (error) {
+      console.error(`❌ Email error for ${email}:`, error);
+      // ✅ NEW: Don't throw error - just return failure
+      return { success: false, error: error.message };
     }
 
-    console.log("✅ Login notification sent successfully");
+    console.log(`✅ Email sent successfully to ${email}`);
     console.log("📨 Email ID:", data?.id);
     
     return { success: true, messageId: data?.id };
 
   } catch (error: any) {
-    console.error('❌ Failed to send login notification:', error.message);
-    throw error;
+    console.error(`❌ Failed to send to ${email}:`, error.message);
+    // ✅ NEW: Don't throw - return error gracefully
+    return { success: false, error: error.message };
   }
 }
