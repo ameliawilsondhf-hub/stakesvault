@@ -109,19 +109,26 @@ export async function GET(request: Request) {
       console.log("⚠️ NextAuth session check failed.");
     }
 
-    // 🔥 FIX: cookies() is async in Next.js 15+
-    if (!userId) {
-      try {
-        const cookieStore = await cookies();
-        const token = cookieStore.get("token"); 
-        if (token && token.value) {
-          const decoded: any = jwt.verify(token.value, process.env.JWT_SECRET!);
-          userId = decoded.id || decoded.userId;
-        }
-      } catch (err) {
-        console.log("⚠️ JWT verification failed.");
-      }
+ if (!userId) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token");
+    
+    console.log("🍪 Cookie check:");
+    console.log("   Has token:", !!token);
+    console.log("   Token value exists:", !!token?.value);
+    
+    if (token && token.value) {
+      const decoded: any = jwt.verify(token.value, process.env.JWT_SECRET!);
+      userId = decoded.id || decoded.userId;
+      console.log("   ✅ UserId from cookie:", userId);
+    } else {
+      console.log("   ❌ No token cookie found");
     }
+  } catch (err: any) {
+    console.log("   ⚠️ JWT verification failed:", err.message);
+  }
+}
 
     if (!userId) {
       return NextResponse.json(

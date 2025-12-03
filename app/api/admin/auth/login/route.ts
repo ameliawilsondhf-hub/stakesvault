@@ -5,8 +5,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { getClientIP } from "@/lib/security";
-import { sendLoginNotification } from "@/lib/email/loginNotification"; // 📧 NEW IMPORT
-
+import { sendLoginNotification } from "@/lib/email/loginNotification";
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -123,6 +122,31 @@ async function sendOTPEmail(email: string, name: string, otp: string) {
     });
   } catch (error) {
     console.error("Failed to send OTP email:", error);
+  }
+}
+
+// ✅ NEW: Get location from IP
+async function getLocationFromIP(ip: string): Promise<string> {
+  try {
+    if (!ip || ip === "unknown" || ip === "::1" || ip === "127.0.0.1") {
+      return "Local Network";
+    }
+
+    const response = await fetch(`https://ipapi.co/${ip}/json/`, {
+      signal: AbortSignal.timeout(3000)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.city && data.country_name 
+        ? `${data.city}, ${data.country_name}` 
+        : "Unknown Location";
+    }
+    
+    return "Unknown Location";
+  } catch (error) {
+    console.error("Failed to fetch location:", error);
+    return "Unknown Location";
   }
 }
 
@@ -248,7 +272,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🎉 PASSWORD VALID - NOW SEND OTP
+    // 🎉 PASSWORD VALID - CLEAR FAILED ATTEMPTS
+    await clearFailedAttempts(email);
 
     // Generate 6-digit OTP
     const otp = crypto.randomInt(100000, 999999).toString();
@@ -303,27 +328,29 @@ export async function POST(req: Request) {
       { expiresIn: "15m" }
     );
 
+    // ✅ GET LOCATION FROM IP
+    console.log("🌍 Fetching location for IP:", clientIP);
+    const location = await getLocationFromIP(clientIP);
+    console.log("📍 Location detected:", location);
+
+    // ✅ SEND LOGIN NOTIFICATION EMAIL (ASYNC - NON-BLOCKING)
+    console.log("📧 Sending login notification email...");
+    sendLoginNotification({
+      email: user.email,
+      userName: user.name || user.email.split('@')[0],
+      ipAddress: clientIP,
+      userAgent: userAgent,
+      location: location,
+      timestamp: new Date(),
+      loginMethod: 'manual',
+    }).then(() => {
+      console.log("✅ Login notification email sent successfully");
+    }).catch((error) => {
+      console.error("❌ Login notification email failed:", error);
+    });
+
     // Send OTP via email
     await sendOTPEmail(user.email, user.name, otp);
-
-    // 📧 ✅ SEND LOGIN NOTIFICATION EMAIL (NEW!)
-    try {
-      await sendLoginNotification({
-        email: user.email,
-        userName: user.name || user.email.split('@')[0],
-        ipAddress: clientIP,
-        userAgent: userAgent,
-        timestamp: new Date(),
-        loginMethod: 'manual', // This is manual/password login
-      });
-      console.log('✅ Login notification email sent');
-    } catch (emailError) {
-      // Don't fail the login if email fails
-      console.error('⚠️ Failed to send login notification:', emailError);
-    }
-
-    // 🔥 SUCCESSFUL CREDENTIALS - CLEAR FAILED ATTEMPTS
-    await clearFailedAttempts(email);
 
     return NextResponse.json({
       success: true,

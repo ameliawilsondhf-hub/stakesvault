@@ -51,6 +51,7 @@ const cookieStore = await cookies();
     let decoded: { id: string, iat: number, exp: number };
     try {
       decoded = jwt.verify(token, jwtSecret) as { id: string, iat: number, exp: number };
+      
     } catch (err) {
       // Token is invalid (expired, tampered, or wrong secret)
       return NextResponse.json(

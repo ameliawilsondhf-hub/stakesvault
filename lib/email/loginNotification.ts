@@ -1,385 +1,362 @@
-// ===================================================================
-// 📧 EMAIL UTILITY - lib/email/loginNotification.ts
-// ===================================================================
+// File: lib/email/loginNotification.ts
 
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "");
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-interface LoginEmailData {
+interface LoginNotificationParams {
   email: string;
   userName: string;
   ipAddress: string;
   userAgent: string;
-  location?: string;
+  location: string;
   timestamp: Date;
-  loginMethod: 'manual' | 'google';
+  loginMethod: 'manual' | 'google' | 'facebook';
 }
 
+export async function sendLoginNotification({
+  email,
+  userName,
+  ipAddress,
+  userAgent,
+  location,
+  timestamp,
+  loginMethod,
+}: LoginNotificationParams) {
+  try {
+    console.log(`📧 Sending login notification to ${email}`);
 
+    // Format login method
+    const methodText = loginMethod === 'manual' 
+      ? 'Email & Password' 
+      : loginMethod === 'google' 
+      ? 'Google Account' 
+      : 'Facebook Account';
 
-// Get device info from user agent
-function parseUserAgent(userAgent: string) {
-  let device = 'Desktop';
-  let browser = 'Unknown Browser';
+    // Format timestamp
+    const formattedTime = timestamp.toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    });
 
-  // Detect device
-  if (/mobile/i.test(userAgent)) {
-    device = 'Mobile Device';
-  } else if (/tablet/i.test(userAgent)) {
-    device = 'Tablet';
-  }
+    // Parse browser and OS from user agent
+    let browser = 'Unknown Browser';
+    let os = 'Unknown OS';
+    
+    if (userAgent.includes('Edg')) browser = 'Edge';
+    else if (userAgent.includes('Chrome')) browser = 'Chrome';
+    else if (userAgent.includes('Firefox')) browser = 'Firefox';
+    else if (userAgent.includes('Safari')) browser = 'Safari';
 
-  // Detect browser
-  if (userAgent.includes('Chrome')) browser = 'Chrome';
-  else if (userAgent.includes('Safari')) browser = 'Safari';
-  else if (userAgent.includes('Firefox')) browser = 'Firefox';
-  else if (userAgent.includes('Edge')) browser = 'Edge';
-  else if (userAgent.includes('Opera')) browser = 'Opera';
+    if (userAgent.includes('Windows')) os = 'Windows';
+    else if (userAgent.includes('Mac OS X')) os = 'macOS';
+    else if (userAgent.includes('Linux')) os = 'Linux';
+    else if (userAgent.includes('Android')) os = 'Android';
+    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) os = 'iOS';
 
-  return { device, browser };
-}
-
-// Format date nicely
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZoneName: 'short'
-  }).format(date);
-}
-
-// HTML Email Template (Binance style)
-function getEmailTemplate(data: LoginEmailData): string {
-  const { device, browser } = parseUserAgent(data.userAgent);
-  const formattedDate = formatDate(data.timestamp);
-  const loginMethodText = data.loginMethod === 'google' ? 'Google Sign-In' : 'Email & Password';
-
-  return `
+    const { data, error } = await resend.emails.send({
+      from: 'StakeVault Security <support@stakesvault.com>',
+      to: [email],
+      subject: `🔐 New Login Alert - ${new Date().toLocaleDateString()}`,
+      html: `
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: #f5f5f5;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background-color: #f5f5f5;
     }
     .container {
       max-width: 600px;
-      margin: 0 auto;
-      background-color: #ffffff;
+      margin: 20px auto;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      padding: 30px;
+      background: linear-gradient(135deg, #F0B90B 0%, #F8D12F 100%);
+      padding: 40px 20px;
       text-align: center;
     }
-    .logo {
-      color: #ffffff;
-      font-size: 28px;
-      font-weight: bold;
+    .header-icon {
+      width: 70px;
+      height: 70px;
+      background: white;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 35px;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .header h1 {
       margin: 0;
+      color: #000;
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .header p {
+      margin: 8px 0 0 0;
+      color: rgba(0,0,0,0.7);
+      font-size: 13px;
+    }
+    .alert-banner {
+      background: #FFF3CD;
+      border-bottom: 3px solid #FFC107;
+      padding: 20px;
+    }
+    .alert-content {
+      display: flex;
+      align-items: flex-start;
+      gap: 15px;
+    }
+    .alert-icon {
+      font-size: 40px;
+      flex-shrink: 0;
+    }
+    .alert-text h2 {
+      margin: 0 0 8px 0;
+      color: #856404;
+      font-size: 18px;
+    }
+    .alert-text p {
+      margin: 0;
+      color: #856404;
+      font-size: 13px;
+      line-height: 1.5;
     }
     .content {
-      padding: 40px 30px;
+      padding: 30px 20px;
     }
-    .alert-box {
-      background-color: #fff3cd;
-      border-left: 4px solid #ffc107;
-      padding: 15px;
-      margin-bottom: 25px;
-      border-radius: 4px;
-    }
-    .alert-title {
-      color: #856404;
-      font-weight: bold;
-      margin: 0 0 8px 0;
-      font-size: 16px;
-    }
-    .alert-text {
-      color: #856404;
-      margin: 0;
-      font-size: 14px;
-    }
-    .greeting {
-      font-size: 18px;
+    .section-title {
       color: #333;
-      margin-bottom: 20px;
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 15px 0;
+      border-bottom: 2px solid #F0B90B;
+      padding-bottom: 8px;
     }
-    .info-box {
-      background-color: #f8f9fa;
-      border: 1px solid #e9ecef;
+    .info-table {
+      width: 100%;
+      background: #F8F9FA;
       border-radius: 8px;
-      padding: 20px;
-      margin: 25px 0;
+      overflow: hidden;
+      margin: 15px 0;
     }
     .info-row {
       display: flex;
-      padding: 12px 0;
-      border-bottom: 1px solid #e9ecef;
+      padding: 12px 15px;
+      border-bottom: 1px solid #E2E8F0;
     }
     .info-row:last-child {
       border-bottom: none;
     }
     .info-label {
-      color: #6c757d;
-      font-size: 14px;
-      min-width: 140px;
+      color: #666;
+      font-size: 13px;
       font-weight: 500;
+      flex: 0 0 120px;
     }
     .info-value {
-      color: #212529;
-      font-size: 14px;
+      color: #333;
+      font-size: 13px;
       font-weight: 600;
-      word-break: break-all;
+      flex: 1;
+      text-align: right;
     }
     .security-notice {
-      background-color: #e7f3ff;
+      background: #E3F2FD;
       border-left: 4px solid #2196F3;
-      padding: 15px;
-      margin: 25px 0;
-      border-radius: 4px;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 6px;
     }
-    .security-title {
-      color: #1976D2;
-      font-weight: bold;
-      margin: 0 0 8px 0;
+    .security-notice-title {
+      color: #1565C0;
       font-size: 15px;
+      font-weight: 600;
+      margin: 0 0 10px 0;
     }
-    .security-text {
-      color: #1976D2;
-      margin: 0;
+    .security-notice p {
+      color: #0D47A1;
       font-size: 13px;
       line-height: 1.6;
+      margin: 0 0 12px 0;
     }
     .button {
       display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #ffffff !important;
+      background: linear-gradient(135deg, #F0B90B 0%, #F8D12F 100%);
+      color: #000 !important;
       text-decoration: none;
-      padding: 12px 30px;
-      border-radius: 6px;
+      padding: 14px 32px;
+      border-radius: 25px;
       font-weight: 600;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(240, 185, 11, 0.4);
       margin: 20px 0;
-      text-align: center;
     }
     .footer {
-      background-color: #f8f9fa;
-      padding: 25px 30px;
+      background: #2C3E50;
+      padding: 25px 20px;
       text-align: center;
-      color: #6c757d;
-      font-size: 12px;
-      line-height: 1.6;
+      color: #ECF0F1;
     }
-    .footer a {
-      color: #667eea;
-      text-decoration: none;
+    .footer-title {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .footer-text {
+      margin: 8px 0;
+      font-size: 12px;
+      opacity: 0.8;
+      line-height: 1.5;
+    }
+    .footer-divider {
+      margin: 15px 0;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .footer-copyright {
+      margin: 12px 0 0 0;
+      font-size: 11px;
+      opacity: 0.5;
     }
     @media only screen and (max-width: 600px) {
-      .content {
-        padding: 20px 15px;
-      }
-      .info-row {
-        flex-direction: column;
-      }
-      .info-label {
-        margin-bottom: 5px;
-      }
+      .container { margin: 0; border-radius: 0; }
+      .content { padding: 20px 15px; }
+      .info-label { flex: 0 0 100px; font-size: 12px; }
+      .info-value { font-size: 12px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
+    
     <!-- Header -->
     <div class="header">
-      <h1 class="logo">🔐 StakeVault Security Alert</h1>
+      <div class="header-icon">🔐</div>
+      <h1>StakeVault</h1>
+      <p>Security Alert</p>
+    </div>
+
+    <!-- Alert Banner -->
+    <div class="alert-banner">
+      <div class="alert-content">
+        <div class="alert-icon">🛡️</div>
+        <div class="alert-text">
+          <h2>New Login Detected</h2>
+          <p>A new login to your account was detected. Please review the details below.</p>
+        </div>
+      </div>
     </div>
 
     <!-- Content -->
     <div class="content">
-      <div class="alert-box">
-        <p class="alert-title">⚠️ New Login Detected</p>
-        <p class="alert-text">We detected a new sign-in to your StakeVault account.</p>
+      
+      <!-- User Info -->
+      <h3 class="section-title">Account Information</h3>
+      <div class="info-table">
+        <div class="info-row">
+          <div class="info-label">👤 Account</div>
+          <div class="info-value">${userName}</div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">📧 Email</div>
+          <div class="info-value">${email}</div>
+        </div>
       </div>
 
-      <p class="greeting">Hello <strong>${data.userName}</strong>,</p>
-      
-      <p style="color: #666; line-height: 1.6; font-size: 15px;">
-        Your account was just accessed. If this was you, you can safely ignore this email. 
-        If you don't recognize this activity, please secure your account immediately.
-      </p>
-
       <!-- Login Details -->
-      <div class="info-box">
-        <h3 style="margin: 0 0 15px 0; color: #333; font-size: 16px;">Login Details</h3>
-        
+      <h3 class="section-title">Login Details</h3>
+      <div class="info-table">
         <div class="info-row">
-          <span class="info-label">📅 Date & Time:</span>
-          <span class="info-value">${formattedDate}</span>
+          <div class="info-label">🕐 Time</div>
+          <div class="info-value">${formattedTime}</div>
         </div>
-        
         <div class="info-row">
-          <span class="info-label">🔑 Login Method:</span>
-          <span class="info-value">${loginMethodText}</span>
+          <div class="info-label">🔑 Method</div>
+          <div class="info-value"><span style="background: #28a745; color: white; padding: 4px 10px; border-radius: 10px; font-size: 11px;">${methodText}</span></div>
         </div>
-        
         <div class="info-row">
-          <span class="info-label">🌐 IP Address:</span>
-          <span class="info-value">${data.ipAddress}</span>
+          <div class="info-label">🌍 Location</div>
+          <div class="info-value">${location}</div>
         </div>
-        
         <div class="info-row">
-          <span class="info-label">💻 Device:</span>
-          <span class="info-value">${device}</span>
+          <div class="info-label">📍 IP Address</div>
+          <div class="info-value" style="font-family: monospace; font-size: 12px;">${ipAddress}</div>
         </div>
-        
         <div class="info-row">
-          <span class="info-label">🌍 Browser:</span>
-          <span class="info-value">${browser}</span>
+          <div class="info-label">💻 Browser</div>
+          <div class="info-value">${browser}</div>
         </div>
-        
-        ${data.location ? `
         <div class="info-row">
-          <span class="info-label">📍 Location:</span>
-          <span class="info-value">${data.location}</span>
+          <div class="info-label">⚙️ System</div>
+          <div class="info-value">${os}</div>
         </div>
-        ` : ''}
       </div>
 
       <!-- Security Notice -->
       <div class="security-notice">
-        <p class="security-title">🛡️ Wasn't You?</p>
-        <p class="security-text">
-          If you didn't sign in, someone else might have access to your account. 
-          Please change your password immediately and enable two-factor authentication.
-        </p>
+        <h3 class="security-notice-title">Was This You?</h3>
+        <p>If this login was authorized by you, no action is needed. Your account remains secure.</p>
+        <p><strong>If you don't recognize this activity:</strong> Please secure your account immediately by changing your password and enabling two-factor authentication.</p>
       </div>
 
-      <center>
-       <a href="${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/profile" class="button">
-  Secure My Account
-</a>
+      <!-- Action Button -->
+      <div style="text-align: center;">
+<a href="${process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || 'https://stakesvault.com'}/dashboard/security" class="button">
 
-      </center>
+        </a>
+      </div>
+
     </div>
 
     <!-- Footer -->
     <div class="footer">
-      <p style="margin: 0 0 10px 0;">
-        <strong>This is an automated security notification</strong>
+      <p class="footer-title">StakeVault Security Team</p>
+      <p class="footer-text">
+        Protecting your investments with advanced security monitoring
       </p>
-      <p style="margin: 0 0 10px 0;">
-        You're receiving this because login notifications are enabled for your account.
+      <div class="footer-divider"></div>
+      <p class="footer-text">
+        This is an automated security notification. Please do not reply to this email.<br>
+        For support, contact us at support@stakesvault.com
       </p>
-      <p style="margin: 0;">
-       <a href="${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/profile">Manage Settings</a> • 
-<a href="mailto:support@stakevault.com">Contact Support</a>
-
-      </p>
-      <p style="margin: 15px 0 0 0; color: #adb5bd;">
+      <p class="footer-copyright">
         © ${new Date().getFullYear()} StakeVault. All rights reserved.
       </p>
     </div>
+
   </div>
 </body>
 </html>
-  `;
-}
-
-// Send login notification email
-export async function sendLoginNotification(data: LoginEmailData): Promise<boolean> {
-  try {
-    console.log("📧 Sending login notification via Resend to:", data.email);
-
-    const html = getEmailTemplate(data);
-
-    const { data: result, error } = await resend.emails.send({
-      from: "StakeVault Security <support@stakesvault.com>", // ✅ OFFICIAL DOMAIN
-      to: [data.email],
-      subject: `🔐 New Login to Your StakeVault Account - ${formatDate(data.timestamp)}`,
-      html,
+      `,
     });
 
     if (error) {
-      console.error("❌ Resend error:", error);
-      return false;
+      console.error("❌ Login notification error:", error);
+      throw new Error(`Email sending failed: ${error.message}`);
     }
 
-    console.log("✅ Login notification sent via Resend:", result?.id);
-    return true;
+    console.log("✅ Login notification sent successfully");
+    console.log("📨 Email ID:", data?.id);
+    
+    return { success: true, messageId: data?.id };
 
-  } catch (error) {
-    console.error("❌ Failed to send login notification via Resend:", error);
-    return false;
+  } catch (error: any) {
+    console.error('❌ Failed to send login notification:', error.message);
+    throw error;
   }
 }
-
-// Helper to get client IP from request
-export function getClientIP(req: Request): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  const realIP = req.headers.get('x-real-ip');
-  const cfIP = req.headers.get('cf-connecting-ip');
-  
-  if (forwarded) return forwarded.split(',')[0].trim();
-  if (realIP) return realIP;
-  if (cfIP) return cfIP;
-  
-  return '::1';
-}
-
-// ===================================================================
-// 🌍 OPTIONAL: Get Location from IP (using free API)
-// ===================================================================
-
-export async function getLocationFromIP(ip: string): Promise<string> {
-  try {
-    // Skip localhost IPs
-    if (ip === '::1' || ip === '127.0.0.1' || ip === 'unknown') {
-      return 'Local Network';
-    }
-
-    // Using free ipapi.co service (no API key needed, 1000 requests/day)
-    const response = await fetch(`https://ipapi.co/${ip}/json/`, {
-      headers: {
-        'User-Agent': 'StakeVault/1.0'
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.city && data.country_name) {
-      return `${data.city}, ${data.country_name}`;
-    }
-    return 'Unknown Location';
-  } catch (error) {
-    console.error('Error getting location:', error);
-    return 'Unknown Location';
-  }
-}
-
-// ===================================================================
-// 📝 USAGE EXAMPLE WITH LOCATION:
-// ===================================================================
-/*
-const ipAddress = getClientIP(req);
-const userAgent = req.headers.get('user-agent') || 'Unknown';
-const location = await getLocationFromIP(ipAddress);
-
-await sendLoginNotification({
-  email: user.email,
-  userName: user.name,
-  ipAddress,
-  userAgent,
-  location, // Optional: Add location info
-  timestamp: new Date(),
-  loginMethod: 'manual',
-});
-*/

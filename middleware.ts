@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+// ✅ CRITICAL FIX: Force Node.js runtime for JWT verification
+export const runtime = 'nodejs';
+
 // -------------------------------
 // 🎯 ROLE DEFINITIONS
 // -------------------------------
@@ -155,6 +158,7 @@ const PUBLIC_ROUTES = [
   "/api/health",
   "/api/admin", // ✅ Admin APIs handle their own auth
   "/api/super-admin",
+  "/api/settings", // ✅ Settings API
 ];
 
 // -------------------------------
@@ -210,8 +214,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApiRoute = pathname.startsWith("/api");
 
+  console.log("\n🔍 [MIDDLEWARE] Request:", { pathname, isApiRoute });
+
   // Allow public routes
   if (isPublicRoute(pathname)) {
+    console.log("✅ [PUBLIC ROUTE] Allowing:", pathname);
     const response = NextResponse.next();
     return addSecurityHeaders(response);
   }
@@ -220,14 +227,20 @@ export async function middleware(request: NextRequest) {
 
   const routeConfig = getRouteConfig(pathname);
   if (!routeConfig) {
+    console.log("ℹ️ [NO CONFIG] No protection for:", pathname);
     const response = NextResponse.next();
     return addSecurityHeaders(response);
   }
 
+  console.log("🔒 [PROTECTED ROUTE] Config:", {
+    path: routeConfig.path,
+    minRole: routeConfig.minRole
+  });
+
   // Check rate limit
   const rateLimitConfig = routeConfig.rateLimit || { max: 100, window: 60000 };
   if (!checkRateLimit(clientIP, rateLimitConfig.max, rateLimitConfig.window)) {
-    console.warn(`[RATE LIMIT] IP: ${clientIP}, Path: ${pathname}`);
+    console.warn(`⚠️ [RATE LIMIT] IP: ${clientIP}, Path: ${pathname}`);
     return createErrorResponse(
       "Too many requests. Please try again later.",
       429,
@@ -236,15 +249,69 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // Get user token
-  const token = await getToken({
+  // ✅ Get user token - Check both NextAuth and manual JWT
+  console.log("🔑 [TOKEN CHECK] Checking NextAuth token...");
+  let token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
   });
 
+  // ✅ If no NextAuth token, check for manual JWT token in cookies
+  if (!token) {
+    console.log("⚠️ [NO NEXTAUTH TOKEN] Checking manual JWT...");
+    const manualToken = request.cookies.get("token")?.value;
+    
+    console.log("🍪 [COOKIES]", {
+      hasManualToken: !!manualToken,
+      allCookies: request.cookies.getAll().map(c => c.name)
+    });
+    
+    if (manualToken) {
+      try {
+        const jwt = require("jsonwebtoken");
+        
+        console.log("🔓 [JWT VERIFY] Attempting to verify manual token...");
+        console.log("🔐 [JWT SECRET] Using secret:", process.env.JWT_SECRET ? "SET" : "NOT SET");
+        
+        const decoded = jwt.verify(manualToken, process.env.JWT_SECRET) as any;
+        
+        console.log("✅ [JWT DECODED]", {
+          id: decoded.id,
+          email: decoded.email,
+          role: decoded.role,
+          isAdmin: decoded.isAdmin,
+          temp: decoded.temp
+        });
+        
+        // Convert manual JWT to token format
+      token = {
+  id: decoded.id,
+  email: decoded.email,
+  role: decoded.role || (decoded.isAdmin ? "admin" : "user"),
+  isAdmin: decoded.isAdmin,
+  temp: decoded.temp || false,
+  status: decoded.status || "active", // ✅ real status use karo
+} as any;
+
+        
+        console.log("✅ [MANUAL JWT] Token verified for:", token.email);
+      } catch (error: any) {
+        console.error("❌ [JWT ERROR] Verification failed:", {
+          message: error.message,
+          name: error.name
+        });
+      }
+    } else {
+      console.error("❌ [NO TOKEN] No manual JWT token found in cookies");
+    }
+  } else {
+    console.log("✅ [NEXTAUTH TOKEN] Found for:", token.email);
+  }
+
   // Check authentication
   if (!token) {
-    console.warn(`[UNAUTHORIZED] IP: ${clientIP}, Path: ${pathname}`);
+    console.warn(`❌ [UNAUTHORIZED] No valid token found for: ${pathname}`);
+    console.warn(`❌ [REDIRECT] Sending to /auth/login`);
     return createErrorResponse(
       "Authentication required",
       401,
@@ -253,16 +320,29 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // Check OTP verification
-  if (token.temp === true && !pathname.startsWith("/auth/verify-otp")) {
-    return NextResponse.redirect(new URL("/auth/verify-otp", request.url));
-  }
+  console.log("✅ [AUTHENTICATED] User:", token.email);
 
-  // Check role permissions
-  const userRole = (token.role as UserRole) || UserRole.USER;
+  // Check OTP verification
+if (token?.temp === true) {
+  if (!pathname.startsWith("/auth/verify-otp") && !pathname.startsWith("/api")) {
+    return NextResponse.redirect(
+      new URL(`/auth/verify-otp?tempToken=${request.cookies.get("token")?.value || ""}`, request.url)
+    );
+  }
+}
+
+  // ✅ Check role permissions - Handle both manual JWT and NextAuth
+  const userRole = (token.role as UserRole) || (token.isAdmin ? UserRole.ADMIN : UserRole.USER);
+
+  console.log("👤 [ROLE CHECK]", {
+    userRole,
+    requiredRole: routeConfig.minRole,
+    hasPermission: hasRequiredRole(userRole, routeConfig.minRole)
+  });
+
   if (!hasRequiredRole(userRole, routeConfig.minRole)) {
     console.warn(
-      `[FORBIDDEN] User: ${token.email}, Role: ${userRole}, Required: ${routeConfig.minRole}, Path: ${pathname}`
+      `❌ [FORBIDDEN] User: ${token.email}, Role: ${userRole}, Required: ${routeConfig.minRole}, Path: ${pathname}`
     );
     return createErrorResponse(
       "Insufficient permissions to access this resource",
@@ -274,6 +354,7 @@ export async function middleware(request: NextRequest) {
 
   // Check account status
   if (token.status === "suspended" || token.status === "banned") {
+    console.warn(`❌ [ACCOUNT SUSPENDED] User: ${token.email}`);
     return createErrorResponse(
       "Your account has been suspended. Please contact support.",
       403,
@@ -285,9 +366,11 @@ export async function middleware(request: NextRequest) {
   // Log admin actions
   if (userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN) {
     console.log(
-      `[ADMIN ACCESS] User: ${token.email}, Role: ${userRole}, IP: ${clientIP}, Path: ${pathname}, Time: ${new Date().toISOString()}`
+      `👑 [ADMIN ACCESS] User: ${token.email}, Role: ${userRole}, IP: ${clientIP}, Path: ${pathname}`
     );
   }
+
+  console.log("✅ [ACCESS GRANTED] Proceeding to:", pathname);
 
   const response = NextResponse.next();
   

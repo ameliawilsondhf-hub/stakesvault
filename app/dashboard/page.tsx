@@ -107,73 +107,91 @@ const DashboardPage: FC = () => {
   }, [activeLevel, data.level1, data.level2, data.level3]);
 
 
-  // Check authentication
-  useEffect(() => {
-    if (status === "loading") return;
+ // ✅ FIXED: Check authentication
+useEffect(() => {
+  if (status === "loading") return;
 
-    if (status === "unauthenticated") {
-      const userId = localStorage.getItem("userId");
-      if (!userId) {
-        console.log("🚫 Not authenticated - redirecting to login");
-        router.push("/auth/login");
-      }
+  const checkAuth = async () => {
+    console.log("🔍 Checking authentication...");
+    console.log("📊 NextAuth status:", status);
+    
+    const userId = localStorage.getItem("userId");
+    console.log("💾 UserId from localStorage:", userId);
+
+    // NextAuth session (Google/Facebook)
+    if (status === "authenticated") {
+      console.log("✅ Authenticated via OAuth");
+      return;
     }
-  }, [status, router]);
 
-  // Load dashboard data
-  async function loadData() {
-    try {
-      console.log("📡 Fetching dashboard data...");
-      setLoading(true);
+    // Manual login (JWT cookie)
+    if (userId) {
+      console.log("✅ Authenticated via manual login");
+      return;
+    }
 
-      const res = await fetch("/api/user/dashboard", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
+    // No authentication
+    console.log("🚫 Not authenticated - redirecting");
+    router.push("/auth/login");
+  };
+
+  checkAuth();
+}, [status, router]);
+
+  // ✅ FIXED: Load dashboard data
+async function loadData() {
+  try {
+    console.log("📡 Loading dashboard data...");
+    console.log("🔑 UserId:", localStorage.getItem("userId"));
+    
+    setLoading(true);
+
+    const res = await fetch("/api/user/dashboard", {
+      method: "GET",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    console.log("📡 Response status:", res.status);
+
+    if (res.status === 401) {
+      console.log("🚫 Unauthorized - redirecting");
+      localStorage.removeItem("userId");
+      router.push("/auth/login");
+      return;
+    }
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const result = await res.json();
+    console.log("✅ Dashboard data loaded:", result.success);
+
+    if (result.success) {
+      setData({
+        walletBalance: result.walletBalance || 0,
+        stakedBalance: result.stakedBalance || 0,
+        totalDeposits: result.totalDeposits || 0,
+        referralCount: result.referralCount || 0,
+        referralEarnings: result.referralEarnings || 0,
+        levelIncome: result.levelIncome || 0,
+        stake: result.stake || null,
+        referralCode: result.referralCode || "",
+        level1: result.referralLevels?.level1?.users || [],
+        level2: result.referralLevels?.level2?.users || [],
+        level3: result.referralLevels?.level3?.users || [],
       });
-
-      console.log("📡 Response status:", res.status);
-
-      if (res.status === 401) {
-        console.log("🚫 Unauthorized - redirecting to login");
-        localStorage.removeItem("userId");
-        router.push("/auth/login");
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const result = await res.json();
-      console.log("✅ Dashboard data loaded:", result);
-
-      if (result.success) {
-        // Ensuring result properties match DashboardData interface
-        setData({
-          walletBalance: result.walletBalance || 0,
-          stakedBalance: result.stakedBalance || 0,
-          totalDeposits: result.totalDeposits || 0,
-          referralCount: result.referralCount || 0,
-          referralEarnings: result.referralEarnings || 0,
-          levelIncome: result.levelIncome || 0,
-          stake: result.stake || null,
-          referralCode: result.referralCode || "",
-level1: result.referralLevels?.level1?.users || [],
-level2: result.referralLevels?.level2?.users || [],
-level3: result.referralLevels?.level3?.users || [],
-        });
-      }
-
-      setLoading(false);
-    } catch (err: any) {
-      console.error("❌ Dashboard fetch error:", err);
-      setError(err.message || "Failed to load data");
-      setLoading(false);
+      console.log("✅ Dashboard loaded successfully!");
     }
+
+    setLoading(false);
+  } catch (err: any) {
+    console.error("❌ Dashboard error:", err);
+    setError(err.message || "Failed to load data");
+    setLoading(false);
   }
+}
 
   useEffect(() => {
     if (status === "authenticated" || localStorage.getItem("userId")) {

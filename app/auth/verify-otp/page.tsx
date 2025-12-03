@@ -69,26 +69,40 @@ function VerifyOTPContent() {
         return;
       }
 
-      console.log("✅ Verification successful!");
+   console.log("✅ Verification successful!");
 
-      if (data.user && data.user.id) {
-        localStorage.setItem("userId", data.user.id);
-        localStorage.setItem("userEmail", data.user.email);
-        localStorage.setItem("userName", data.user.name || "");
-        console.log("💾 User data saved to localStorage");
-      }
-      
-      sessionStorage.removeItem("tempToken");
-      sessionStorage.removeItem("userEmail");
+// Save user data
+if (data.user && data.user.id) {
+  localStorage.setItem("userId", data.user.id);
+  localStorage.setItem("userEmail", data.user.email);
+  localStorage.setItem("userName", data.user.name || "");
+  
+  // Store admin status
+  if (data.user.isAdmin) {
+    localStorage.setItem("isAdmin", "true");
+  }
+  
+  console.log("💾 User data saved to localStorage");
+}
 
-      setSuccess(true);
-      setLoading(false);
-      
-      console.log("🔄 Redirecting to dashboard in 800ms...");
-      setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 800);
-      
+sessionStorage.removeItem("tempToken");
+sessionStorage.removeItem("userEmail");
+
+setSuccess(true);
+setLoading(false);
+
+console.log("🔄 Redirecting...");
+
+setTimeout(() => {
+  if (data.user && data.user.isAdmin) {
+    console.log("→ Hard redirect to admin dashboard");
+    window.location.replace("/admin");   // ✅ HARD RELOAD
+  } else {
+    console.log("→ Hard redirect to user dashboard");
+    window.location.replace("/dashboard"); // ✅ HARD RELOAD
+  }
+}, 300);
+
     } catch (error) {
       console.error("❌ OTP verification error:", error);
       setOtp("");

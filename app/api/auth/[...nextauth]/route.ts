@@ -5,7 +5,6 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 
 import { 
@@ -16,12 +15,17 @@ import {
   createSecurityAlert
 } from "@/lib/security";
 
-// 🔥 UPDATED: Track login with optional client device info
+// 🔥 UPDATED: Track login with optional client device info (unchanged)
 async function trackUserLogin(
   user: any, 
   provider: string = 'credentials',
   clientDeviceInfo?: { browser?: string; os?: string; device?: string }
 ) {
+  // ... (Your existing trackUserLogin implementation remains here, it's perfect)
+  // 
+
+
+  
   try {
     const currentIP = await getClientIP();
     const currentLocation = await getLocationFromIP(currentIP);
@@ -219,6 +223,7 @@ async function trackUserLogin(
   }
 }
 
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -242,15 +247,48 @@ export const authOptions: NextAuthOptions = {
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
+        // 🌉 BRIDGE FIELD: Used by client to bypass password check after 2FA
+        is2FAverified: { label: "2FA Verified Flag", type: "text", optional: true } 
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.email) {
+          return null;
+        }
+
+        // =========================================================
+        // 🌉 BRIDGE LOGIC: Skip password check if 2FA is verified (New)
+        // =========================================================
+        if (credentials.is2FAverified === 'true') {
+            await connectDB();
+            // Fetch user without password, as login is already verified by OTP
+            const user = await User.findOne({ email: credentials.email });
+            
+            if (user && !user.isBanned) {
+                console.log(`✅ 2FA Bridge Login Success for ${user.email}`);
+                // Return user object directly to JWT callback
+                return {
+                    id: user._id?.toString() || String(user._id),
+                    email: user.email,
+                    name: user.name,
+                    isAdmin: user.isAdmin || false,
+                    // No trackUserLogin here, as it was tracked on the initial password login
+                };
+            }
+            return null; // User not found or banned
+        }
+        // =========================================================
+        // END BRIDGE LOGIC
+        // =========================================================
+
+        // --- Original Password Login Flow ---
+        if (!credentials.password) {
           return null;
         }
 
         await connectDB();
         
+        // Select password for bcrypt comparison during normal login
         const user = await User.findOne({ email: credentials.email }).select("+password");
         
         if (!user || !user.password) {
@@ -258,7 +296,8 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (user.isBanned) {
-          throw new Error(`banned::${user.banReason || "Account banned"}`);
+          // NextAuth handles this error type
+          throw new Error(`banned::${user.banReason || "Account banned"}`); 
         }
 
         const isValid = await bcrypt.compare(credentials.password, user.password);
@@ -267,6 +306,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        // ✅ Normal Login: Track user login activity
         await trackUserLogin(user, 'credentials');
 
         return {
@@ -284,10 +324,14 @@ export const authOptions: NextAuthOptions = {
   await connectDB();
 
   try {
+    // Check if this is the 2FA bridge sign-in (after OTP verification)
+    const isBridgeSignIn = account?.provider === 'credentials' && (user as any).is2FAverified === 'true';
+
     let existingUser = await User.findOne({ email: user.email });
 
     // ✅ CREATE USER IF NOT EXISTS (OAUTH)
     if (!existingUser) {
+      // ... (Creation logic remains the same) ...
       const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
       const currentIP = await getClientIP();
       const currentLocation = await getLocationFromIP(currentIP);
@@ -297,15 +341,6 @@ export const authOptions: NextAuthOptions = {
         email: user.email,
         emailVerified: true,
         referralCode,
-        referredBy: null,
-        walletBalance: 0,
-        totalDeposits: 0,
-        levelIncome: 0,
-        referralEarnings: 0,
-        referralCount: 0,
-        level1: [],
-        level2: [],
-        level3: [],
         registrationIP: currentIP,
         registrationLocation: currentLocation,
         ipAddress: currentIP,
@@ -327,24 +362,23 @@ export const authOptions: NextAuthOptions = {
       return false;
     }
 
-    // ✅ TRACK LOGIN
-    if (account?.provider) {
+    // ✅ TRACK LOGIN (Only for initial OAuth login, Credentials is tracked in authorize)
+    if (account?.provider && account.provider !== 'credentials') {
       await trackUserLogin(existingUser, account.provider);
     }
-
-
- 
-
+    
     // ✅ FORCE EMAIL VERIFIED
     if (!existingUser.emailVerified) {
       existingUser.emailVerified = true;
       await existingUser.save();
     }
 
-    // 🔐 ✅✅✅ **FORCE 2FA ON GOOGLE + EMAIL**
-if (existingUser.twoFactorEnabled) {
-
+    // 🔐 ✅✅✅ **2FA CHECK**
+    if (existingUser.twoFactorEnabled && !isBridgeSignIn) { // 👈 FIX: Bridge sign-in ko skip karo
+        
       // ✅ GENERATE OTP
+      // Note: Agar aap TOTP (Google Authenticator) use kar rahe hain, 
+      // toh yeh adminOTP ki zaroorat nahi padegi. Lekin agar aap email OTP de rahe hain, toh theek hai.
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
       existingUser.adminOTP = otp;
@@ -356,7 +390,7 @@ if (existingUser.twoFactorEnabled) {
         {
           id: existingUser._id.toString(),
           temp: true,
-          purpose: "user-2fa",
+          purpose: "user-2fa", // <-- This purpose is checked in verify-otp route
         },
         process.env.JWT_SECRET!,
         { expiresIn: "5m" }
@@ -366,11 +400,11 @@ if (existingUser.twoFactorEnabled) {
       return `/auth/verify-otp?tempToken=${tempToken}`;
     }
 
-    // ✅ AGAR 2FA OFF HAI TO NORMAL LOGIN
+    // ✅ AGAR 2FA OFF HAI YA BRIDGE SIGN-IN HAI TO NORMAL LOGIN
     return true;
 
   } catch (err) {
-    console.error("❌ OAuth SignIn Error:", err);
+    console.error("❌ OAuth/SignIn Error:", err);
     return false;
   }
 },

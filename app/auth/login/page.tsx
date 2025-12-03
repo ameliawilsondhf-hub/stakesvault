@@ -177,7 +177,7 @@ const handleVerify2FA = async () => {
     setShow2FA(false);
     setTwoFaOtp("");
     setTempToken("");
-    router.push("/dashboard");
+window.location.href = "/dashboard";
 
   } catch (err) {
     console.error("2FA Verify Error:", err);
@@ -187,111 +187,135 @@ const handleVerify2FA = async () => {
   }
 };
 
-  // 🔥 ENHANCED: Handle login with IP blocking
-  const handleSubmit = async (e: any) => {
+  // 🔥 FINAL FIXED handleSubmit - NO DUPLICATES
+// Replace your entire handleSubmit function (lines ~165-323) with this:
+
+// ✅ REPLACE YOUR handleSubmit FUNCTION WITH THIS (lines ~165-323)
+
+const handleSubmit = async (e: any) => {
+  e.preventDefault();
+  
+  // Check if blocked
+  if (isBlocked) {
+    setShowBlockedPopup(true);
+    return;
+  }
+
+  setError("");
+  setLoading(true);
+
+  try {
+    console.log("🔄 Sending login request...");
+
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
     
-    e.preventDefault();
-    
-    // Check if blocked
-    if (isBlocked) {
+    console.log("📥 Login Response:", data);
+    console.log("✅ Success:", data.success);
+    console.log("🔐 Requires 2FA:", data.requires2FA);
+
+    // 🔥 HANDLE IP BLOCKING (429 status)
+    if (res.status === 429) {
+      console.log("🚫 IP Blocked");
+      setIsBlocked(true);
+      setBlockTimeRemaining(data.blockTimeRemaining * 60 || 3600);
       setShowBlockedPopup(true);
+      setLoading(false);
       return;
     }
 
-    setError("");
-    setLoading(true);
+    // ❌ HANDLE ERRORS (401, 403, etc)
+    if (!res.ok) {
+      console.log("❌ Login failed:", data.message);
+      
+      // Update remaining attempts
+      if (data.attemptsRemaining !== undefined) {
+        setAttemptsRemaining(data.attemptsRemaining);
+      }
 
-    try {
-      const res = await fetch("/api/auth/login", {
-        
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-      // ✅ AGAR 2FA ENABLED HAI
-if (data.requires2FA && data.tempToken) {
-  setTempToken(data.tempToken);
-  setShow2FA(true);
-  setLoading(false); // ✅ YEH LINE ADD KARO
-  return;
-}
-
-
-// ✅ NORMAL LOGIN FLOW
-if (data.success) {
-  router.push("/dashboard");
-}
-
-
-      // 🔥 Handle IP blocking response
-      if (res.status === 429) {
-        setIsBlocked(true);
-        setBlockTimeRemaining(data.blockTimeRemaining * 60 || 3600); // Convert minutes to seconds
-        setShowBlockedPopup(true);
+      // Handle banned account
+      if (data?.banned) {
+        setBannedReason(data.reason || "Account banned");
+        setShowBanPopup(true);
         setLoading(false);
         return;
       }
 
-      if (!res.ok) {
-        // 🔥 Update remaining attempts
-        if (data.attemptsRemaining !== undefined) {
-          setAttemptsRemaining(data.attemptsRemaining);
-        }
+      setError(data.message || "Login failed");
+      setLoading(false);
+      return;
+    }
 
-        if (data?.banned) {
-          setLoading(false);
-          setBannedReason(data.reason || "Account banned");
-          setShowBanPopup(true);
-          return;
-        }
+    // ✅ CHECK IF 2FA REQUIRED
+    if (data.requires2FA === true && data.tempToken) {
+      console.log("🔐 2FA Required - Redirecting to OTP page");
+      setLoading(false);
+      
+      // Store email in session for OTP page
+      sessionStorage.setItem("userEmail", email);
+      
+      // Redirect to OTP verification page
+      window.location.href = `/auth/verify-otp?tempToken=${data.tempToken}`;
+      return;
+    }
 
-        setError(data.message || "Login failed");
-        setLoading(false);
-        return;
-      }
-
-      // Reset attempts on successful login
+    // ✅ SUCCESS - NO 2FA (Direct Login)
+    if (data.success === true) {
+      console.log("✅ Login successful! No 2FA required");
+      
+      // Reset security counters
       setAttemptsRemaining(5);
-
-
+      
+      // Store userId (important for dashboard)
       if (data.userId) {
         localStorage.setItem("userId", data.userId);
+        console.log("💾 UserId stored:", data.userId);
       }
 
       setSuccess(true);
       setLoading(false);
 
-      // Track device for credentials login
+      // Track device (non-blocking)
       const deviceInfo = getClientDeviceInfo();
       if (deviceInfo) {
-        try {
-          await fetch('/api/admin/user/track-device', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ...deviceInfo,
-              provider: 'credentials'
-            })
-          });
-          console.log('✅ Credentials device tracked');
-        } catch (error) {
-          console.error('⚠️ Device tracking failed (non-blocking):', error);
-        }
+        fetch('/api/admin/user/track-device', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...deviceInfo,
+            provider: 'credentials'
+          })
+        }).catch(err => console.error('⚠️ Device tracking failed:', err));
       }
 
-      setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 500);
-    } catch (e) {
-      console.error("Login error:", e);
-      setError("Server error. Please try again.");
-      setLoading(false);
+      // ✅ WAIT FOR COOKIE TO BE SET, THEN REDIRECT
+      console.log("🔄 Redirecting to dashboard in 800ms...");
+     // CHANGE FROM 800 to 2000
+setTimeout(() => {
+  console.log("🚀 Navigating to /dashboard");
+  window.location.href = "/dashboard";
+}, 2000); // ✅ 2 seconds delay
+      
+      return;
     }
-  };
 
+    // Fallback error
+    console.error("⚠️ Unexpected response:", data);
+    setError("Unexpected response from server");
+    setLoading(false);
+
+  } catch (e) {
+    console.error("❌ Login exception:", e);
+    setError("Server error. Please try again.");
+    setLoading(false);
+  }
+};
   // 🔥 Format countdown timer
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

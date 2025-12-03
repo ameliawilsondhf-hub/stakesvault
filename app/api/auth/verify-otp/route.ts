@@ -108,14 +108,27 @@ export async function POST(req: Request) {
     console.log("✅ Login token generated");
 
     // ✅ SET AUTH COOKIE
-    const cookieStore = cookies();
-    cookieStore.set("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
-      path: "/",
-    });
+    const response = NextResponse.json({
+  success: true,
+  message: "OTP verification successful",
+  user: {
+    id: user._id.toString(),
+    email: user.email,
+    name: user.name,
+    isAdmin: user.isAdmin,
+  },
+});
+
+response.cookies.set("token", token, {
+  httpOnly: true,
+  secure: false,       // ✅ localhost ke liye
+  sameSite: "lax",     // ✅ STRICT ❌ yahan problem karta hai
+  maxAge: 60 * 60 * 24 * 7,
+  path: "/",
+});
+
+return response;
+
 
     console.log("✅ 2FA LOGIN SUCCESS:", user.email);
 

@@ -51,13 +51,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ FINAL LOGIN TOKEN
-    const token = jwt.sign(
-      { id: user._id.toString(), email: user.email },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" }
-    );
-
+   const token = jwt.sign(
+      { 
+        id: user._id.toString(), 
+        email: user.email,
+        temp: false // <--- YE PROPERTY ZAROOR ADD KAREIN
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "7d" }
+    );
     const response = NextResponse.json({
       success: true,
       message: "2FA Verified. Login successful.",
