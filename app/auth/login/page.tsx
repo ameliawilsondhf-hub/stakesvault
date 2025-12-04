@@ -326,7 +326,9 @@ setTimeout(() => {
   if (!mounted) return null;
 
   return (
-<div className="dark bg-[#020617] text-white">
+<div className="min-h-screen w-full bg-[#050b16] flex items-center justify-center px-3 py-6 text-white">
+
+
 
   {/* 🔥 PROFESSIONAL IP BLOCKED POPUP */}
 {/* 🔥 PROFESSIONAL IP BLOCKED POPUP - WITH CLICKABLE FORGOT PASSWORD */}
@@ -337,8 +339,8 @@ setTimeout(() => {
       {/* Animated background */}
       <div className="absolute -inset-1 bg-gradient-to-r from-red-500 via-orange-500 to-red-500 rounded-2xl blur-2xl opacity-30 animate-pulse"></div>
 
-      <div className="relative z-10">
-        {/* Icon */}
+<div className="relative z-10 text-sm leading-snug">
+
         <div className="flex justify-center mb-5">
           <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center animate-bounce">
             <span className="text-5xl">🔒</span>
@@ -522,7 +524,7 @@ setTimeout(() => {
 )}
 
       {/* Main Login Page */}
-<div className="min-h-screen w-full bg-gradient-to-br from-[#020617] via-[#1e293b] to-[#020617] flex items-center justify-center p-3 sm:p-4 relative overflow-hidden text-white">
+<div className="min-h-screen w-full bg-[#020617] flex items-center justify-center px-4 py-6 text-white relative">
 
         {/* Animated Background Orbs */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -544,7 +546,7 @@ setTimeout(() => {
 
         {/* Login Card */}
         
-<div className="relative bg-[#0f172a] text-white shadow-2xl rounded-2xl p-6 sm:p-10 w-full max-w-sm sm:max-w-md border border-white/10 animate-fade-in z-10">
+<div className="relative w-full max-w-[360px] bg-[#0a1220] border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.9)] rounded-2xl px-5 py-7 z-10">
 
           <div className="absolute -inset-1 bg-gradient-to-r from-[#0f172a] via-[#1e293b] to-[#0f172a] rounded-3xl blur-lg opacity-25 dark:opacity-30 animate-pulse-slow"></div>
 
@@ -556,7 +558,7 @@ setTimeout(() => {
             {dark ? "☀️" : "🌙"}
           </button>
 
-<div className="relative z-10 text-[13px] sm:text-base leading-tight sm:leading-normal">
+<div className="relative z-10 text-sm sm:text-base leading-snug">
 
             <div className="text-center mb-8">
               <div className="relative inline-block mb-4">
@@ -649,8 +651,8 @@ setTimeout(() => {
                 <input
                   type="email"
                   placeholder="Enter your email"
-                  className="w-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#1f2937] text-gray-900 dark:text-white p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none transition-all"
-                  value={email}
+className="w-full border border-white/10 bg-[#020617] text-white placeholder-gray-400 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={loading || isBlocked}
@@ -665,8 +667,8 @@ setTimeout(() => {
                   <input
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
-                    className="w-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#1f2937] text-gray-900 dark:text-white p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none pr-12 transition-all"
-                    value={password}
+className="w-full bg-[#020617] border border-white/15 text-white placeholder-gray-400 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={loading || isBlocked}
@@ -722,8 +724,8 @@ setTimeout(() => {
                 <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white dark:bg-[#1a1f2e] text-gray-500 dark:text-gray-400">
-                  Or continue with
+<span className="px-4 bg-[#020617] text-gray-400">
+
                 </span>
               </div>
             </div>
@@ -734,7 +736,8 @@ setTimeout(() => {
                 type="button"
                 onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
                 disabled={isBlocked}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm hover:scale-105 transition-all text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#020617] border border-white/10
+gray-700 rounded-xl shadow-sm hover:scale-105 transition-all text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
@@ -746,7 +749,8 @@ setTimeout(() => {
                 type="button"
                 onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
                 disabled={isBlocked}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm hover:scale-105 transition-all text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#020617] border border-white/10
+gray-700 rounded-xl shadow-sm hover:scale-105 transition-all text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
                   <path fill="#0b0a0a6b" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>

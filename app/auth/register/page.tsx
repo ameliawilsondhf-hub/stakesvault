@@ -75,7 +75,7 @@ export default function RegisterPage() {
 
   return (
     <div className={dark ? "dark" : ""}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#0a0e1a] dark:via-[#0f1419] dark:to-[#1a1f2e] flex items-center justify-center p-4 relative overflow-hidden transition-all duration-500">
+<div className="min-h-[100svh] bg-[#0b1220] flex items-center justify-center px-3 py-6 transition-all">
 
         {/* Animated Background Orbs */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -96,7 +96,7 @@ export default function RegisterPage() {
 <img src="/stakevault.png" className="rotate-bg absolute w-[230px] top-2/3 left-1/3" />
 
         {/* Register Card */}
-        <div className="relative bg-white/95 dark:bg-[#1a1f2e]/95 backdrop-blur-xl shadow-2xl rounded-3xl p-4 w-full max-w-md border border-gray-200/50 dark:border-gray-700/50 animate-fade-in z-10">
+<div className="relative bg-[#0f172a] text-white shadow-2xl rounded-2xl p-5 w-full max-w-[380px] border border-white/10 z-10">
 
           {/* Card Glow Effect */}
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-3xl blur-lg opacity-20 dark:opacity-30 animate-pulse-slow"></div>
@@ -111,8 +111,8 @@ export default function RegisterPage() {
           </button>
 
           {/* Content Container */}
-          <div className="relative z-10">
-            
+<div className="relative z-10 text-sm leading-snug">
+
             {/* Logo Section */}
             <div className="text-center mb-8">
               <div className="relative inline-block mb-4">
