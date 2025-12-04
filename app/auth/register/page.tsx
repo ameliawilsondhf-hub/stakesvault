@@ -60,48 +60,45 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-[100svh] bg-[#0a0f1e] flex items-center justify-center px-4 py-6 relative overflow-hidden">
+    <div className="min-h-[100svh] bg-[#0d1117] flex items-center justify-center px-3 py-4 relative overflow-hidden">
       
-      {/* Professional Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-purple-900/20 to-pink-900/20"></div>
+      {/* Professional Dark Background with Subtle Gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-950/20 via-purple-950/10 to-transparent"></div>
       
-      {/* Animated Grid Pattern */}
-      <div className="absolute inset-0 opacity-[0.03]" style={{
-        backgroundImage: `linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)`,
-        backgroundSize: '50px 50px'
+      {/* Grid Pattern - Like Pocket Option */}
+      <div className="absolute inset-0 opacity-[0.02]" style={{
+        backgroundImage: 'linear-gradient(rgba(99, 102, 241, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(99, 102, 241, 0.5) 1px, transparent 1px)',
+        backgroundSize: '60px 60px'
       }}></div>
       
-      
-      {/* Professional Animated Orbs */}
+      {/* Subtle Animated Glow Effects */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute w-[500px] h-[500px] bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-full blur-[100px] -top-48 -left-48 animate-float"></div>
-        <div className="absolute w-[400px] h-[400px] bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-full blur-[100px] top-1/3 -right-32 animate-float-slow"></div>
-        <div className="absolute w-[350px] h-[350px] bg-gradient-to-r from-indigo-500/10 to-blue-500/10 rounded-full blur-[100px] -bottom-32 left-1/4 animate-float-reverse"></div>
+        <div className="absolute w-[500px] h-[500px] bg-blue-500/[0.08] rounded-full blur-[120px] -top-48 -left-48 animate-pulse-slow"></div>
+        <div className="absolute w-[400px] h-[400px] bg-purple-500/[0.06] rounded-full blur-[100px] top-1/2 -right-32 animate-pulse-slower"></div>
+        <div className="absolute w-[450px] h-[450px] bg-indigo-500/[0.07] rounded-full blur-[110px] -bottom-32 left-1/4 animate-pulse-slow"></div>
       </div>
 
-      {/* Subtle Background Logos */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <img src="/stakevault.png" className="rotate-bg absolute w-[180px] md:w-[280px] top-10 left-10 opacity-[0.04] blur-[1px]" alt="" />
-        <img src="/stakevault.png" className="rotate-bg absolute w-[150px] md:w-[240px] top-40 right-10 opacity-[0.04] blur-[1px]" alt="" />
-        <img src="/stakevault.png" className="rotate-bg absolute w-[160px] md:w-[260px] bottom-20 right-20 opacity-[0.04] blur-[1px]" alt="" />
-        <img src="/stakevault.png" className="rotate-bg absolute w-[140px] md:w-[220px] bottom-32 left-16 opacity-[0.04] blur-[1px] hidden md:block" alt="" />
+      {/* Very Subtle Logo Watermarks */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.015]">
+        <img src="/stakevault.png" className="absolute w-[200px] md:w-[280px] top-10 left-10 animate-spin-very-slow" alt="" />
+        <img src="/stakevault.png" className="absolute w-[180px] md:w-[250px] bottom-10 right-10 animate-spin-very-slow-reverse" alt="" />
       </div>
 
-      {/* Register Card */}
-      <div className="relative bg-[#0f1629] shadow-2xl rounded-2xl p-6 md:p-8 w-full max-w-[420px] border border-white/5 z-10 backdrop-blur-xl">
+      {/* Register Card - Professional Design - Bigger for Mobile */}
+      <div className="relative bg-[#161b22]/95 backdrop-blur-xl shadow-2xl rounded-2xl p-5 sm:p-6 md:p-8 w-full max-w-[95%] sm:max-w-[480px] border border-[#30363d] z-10">
         
-        {/* Professional Card Glow */}
-        <div className="absolute -inset-[1px] bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-sm"></div>
+        {/* Subtle Card Glow */}
+        <div className="absolute -inset-[1px] bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-transparent rounded-2xl blur-xl"></div>
 
         {/* Content Container */}
         <div className="relative z-10">
           
-          {/* Logo Section */}
-          <div className="text-center mb-6">
+          {/* Logo Section - Professional & Bigger */}
+          <div className="text-center mb-5">
             <div className="relative inline-block mb-3">
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-300 via-teal-300 to-cyan-300 rounded-full blur-xl opacity-40 animate-pulse-slow scale-110"></div>
+              <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-2xl animate-pulse-slow"></div>
               
-              <div className="relative w-20 h-20 md:w-24 md:h-24 mx-auto rounded-full overflow-hidden shadow-xl">
+              <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 mx-auto rounded-full overflow-hidden shadow-xl border-2 border-[#30363d]">
                 <img
                   src="/stakevault.png"
                   alt="StakeVault Logo"
@@ -110,26 +107,26 @@ export default function RegisterPage() {
               </div>
             </div>
             
-            <h1 className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-1">
               StakeVault
             </h1>
-            <p className="text-gray-600 text-sm font-medium">
-              🚀 Create your account and start earning
+            <p className="text-gray-400 text-xs sm:text-sm">
+              Create your account and start earning rewards
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleRegister} className="space-y-4">
+          <form onSubmit={handleRegister} className="space-y-3.5">
             
             {/* Name Input */}
             <div>
-              <label className="text-sm font-semibold text-gray-700 mb-2 block">
+              <label className="text-xs sm:text-sm font-medium text-gray-300 mb-1.5 block">
                 Full Name
               </label>
               <input
                 type="text"
                 placeholder="Enter your name"
-                className="w-full border border-gray-300 bg-white text-gray-900 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                className="w-full border border-[#30363d] bg-[#0d1117] text-white p-3 sm:p-3.5 rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-gray-500 hover:border-[#484f58]"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -139,13 +136,13 @@ export default function RegisterPage() {
 
             {/* Email Input */}
             <div>
-              <label className="text-sm font-semibold text-gray-700 mb-2 block">
+              <label className="text-xs sm:text-sm font-medium text-gray-300 mb-1.5 block">
                 Email Address
               </label>
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="w-full border border-gray-300 bg-white text-gray-900 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                className="w-full border border-[#30363d] bg-[#0d1117] text-white p-3 sm:p-3.5 rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-gray-500 hover:border-[#484f58]"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -155,14 +152,14 @@ export default function RegisterPage() {
 
             {/* Password Input */}
             <div>
-              <label className="text-sm font-semibold text-gray-700 mb-2 block">
+              <label className="text-xs sm:text-sm font-medium text-gray-300 mb-1.5 block">
                 Password
               </label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   placeholder="Create a password"
-                  className="w-full border border-gray-300 bg-white text-gray-900 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all pr-12 placeholder:text-gray-400"
+                  className="w-full border border-[#30363d] bg-[#0d1117] text-white p-3 sm:p-3.5 rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-12 placeholder:text-gray-500 hover:border-[#484f58]"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -171,7 +168,7 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition text-xl"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition text-lg sm:text-xl"
                 >
                   {showPassword ? "👁️" : "👁️‍🗨️"}
                 </button>
@@ -180,13 +177,13 @@ export default function RegisterPage() {
 
             {/* Referral Input */}
             <div>
-              <label className="text-sm font-semibold text-gray-700 mb-2 block">
+              <label className="text-xs sm:text-sm font-medium text-gray-300 mb-1.5 block">
                 Referral Code <span className="text-gray-500 font-normal">(optional)</span>
               </label>
               <input
                 type="text"
                 placeholder="Enter referral code"
-                className="w-full border border-gray-300 bg-white text-gray-900 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                className="w-full border border-[#30363d] bg-[#0d1117] text-white p-3 sm:p-3.5 rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-gray-500 hover:border-[#484f58]"
                 value={referral}
                 onChange={(e) => setReferral(e.target.value)}
                 disabled={loading}
@@ -195,25 +192,25 @@ export default function RegisterPage() {
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm text-center animate-shake">
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2.5 rounded-lg text-xs sm:text-sm text-center animate-shake">
                 ⚠️ {error}
               </div>
             )}
 
             {/* Success Message */}
             {success && (
-              <div className="bg-green-50 border border-green-300 text-green-700 px-4 py-3 rounded-xl text-sm text-center animate-pulse">
+              <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-3 py-2.5 rounded-lg text-xs sm:text-sm text-center animate-pulse">
                 ✓ Registration Successful! Redirecting...
               </div>
             )}
 
-            {/* Register Button */}
+            {/* Register Button - Professional */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white p-3.5 rounded-xl font-bold shadow-lg shadow-purple-500/30 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 relative overflow-hidden group"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white p-3.5 sm:p-4 rounded-lg font-semibold text-sm sm:text-base shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              <span className="relative z-10 flex items-center justify-center gap-2">
+              <span className="flex items-center justify-center gap-2">
                 {loading ? (
                   <>
                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
@@ -231,39 +228,41 @@ export default function RegisterPage() {
           </form>
 
           {/* Divider */}
-          <div className="relative my-6">
+          <div className="relative my-4 sm:my-5">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
+              <div className="w-full border-t border-[#30363d]"></div>
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">Or continue with</span>
+            <div className="relative flex justify-center text-xs sm:text-sm">
+              <span className="px-3 sm:px-4 bg-[#161b22]/95 text-gray-400">Or continue with</span>
             </div>
           </div>
 
-          {/* Social Login Buttons */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          {/* Social Login Buttons - Professional */}
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
             <button
               type="button"
               onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all text-sm font-medium text-gray-700"
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0d1117] border border-[#30363d] rounded-lg hover:bg-[#161b22] hover:border-[#484f58] transition-all text-xs sm:text-sm font-medium text-gray-300"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
-                width="18"
-                height="18"
+                width="16"
+                height="16"
+                className="sm:w-[18px] sm:h-[18px]"
                 fill="#1877F2"
               >
                 <path d="M22.675 0H1.325C.593 0 0 .593 0 1.325v21.351C0 23.407.593 24 1.325 24h11.495v-9.294H9.691V11.01h3.129V8.414c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.716-1.795 1.764v2.316h3.587l-.467 3.696h-3.12V24h6.116C23.407 24 24 23.407 24 22.675V1.325C24 .593 23.407 0 22.675 0z"/>
               </svg>
-              Facebook
+              <span className="hidden xs:inline">Facebook</span>
+              <span className="xs:hidden">FB</span>
             </button>
             <button
               type="button"
               onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all text-sm font-medium text-gray-700"
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0d1117] border border-[#30363d] rounded-lg hover:bg-[#161b22] hover:border-[#484f58] transition-all text-xs sm:text-sm font-medium text-gray-300"
             >
-              <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+              <svg width="16" height="16" className="sm:w-[18px] sm:h-[18px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
                 <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6C44.4 38.6 46.98 32.42 46.98 24.55z"/>
                 <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
@@ -274,12 +273,12 @@ export default function RegisterPage() {
           </div>
 
           {/* Login Link */}
-          <div className="text-center">
-            <p className="text-gray-600 text-sm">
+          <div className="text-center mb-3 sm:mb-4">
+            <p className="text-gray-400 text-xs sm:text-sm">
               Already have an account?{" "}
               <Link 
                 href="/auth/login"
-                className="text-blue-600 hover:text-blue-700 font-semibold transition"
+                className="text-blue-500 hover:text-blue-400 font-medium transition"
               >
                 Sign in
               </Link>
@@ -287,49 +286,44 @@ export default function RegisterPage() {
           </div>
 
           {/* Footer */}
-          <div className="text-center text-xs text-gray-500 mt-6">
+          <div className="text-center text-[10px] sm:text-xs text-gray-500">
             © {new Date().getFullYear()} StakeVault • All Rights Reserved
           </div>
         </div>
       </div>
 
-      {/* Animations */}
+      {/* Professional Animations */}
       <style jsx>{`
-        @keyframes rotate-logo-bg {
+        @keyframes spin-very-slow {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
-
-        .rotate-bg {
-          animation: rotate-logo-bg 50s linear infinite;
+        
+        @keyframes spin-very-slow-reverse {
+          0% { transform: rotate(360deg); }
+          100% { transform: rotate(0deg); }
         }
 
-        @keyframes float {
-          0%, 100% { transform: translate(0, 0); }
-          33% { transform: translate(30px, -30px); }
-          66% { transform: translate(-20px, 20px); }
-        }
-        @keyframes float-slow {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(-30px, 30px); }
-        }
-        @keyframes float-reverse {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(20px, -20px); }
-        }
         @keyframes pulse-slow {
-          0%, 100% { opacity: 0.2; }
-          50% { opacity: 0.4; }
+          0%, 100% { opacity: 0.08; transform: scale(1); }
+          50% { opacity: 0.12; transform: scale(1.05); }
         }
+        
+        @keyframes pulse-slower {
+          0%, 100% { opacity: 0.06; transform: scale(1); }
+          50% { opacity: 0.10; transform: scale(1.03); }
+        }
+        
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           25% { transform: translateX(-5px); }
           75% { transform: translateX(5px); }
         }
-        .animate-float { animation: float 20s ease-in-out infinite; }
-        .animate-float-slow { animation: float-slow 25s ease-in-out infinite; }
-        .animate-float-reverse { animation: float-reverse 22s ease-in-out infinite; }
-        .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+        
+        .animate-spin-very-slow { animation: spin-very-slow 60s linear infinite; }
+        .animate-spin-very-slow-reverse { animation: spin-very-slow-reverse 60s linear infinite; }
+        .animate-pulse-slow { animation: pulse-slow 4s ease-in-out infinite; }
+        .animate-pulse-slower { animation: pulse-slower 5s ease-in-out infinite; }
         .animate-shake { animation: shake 0.4s ease-in-out; }
       `}</style>
     </div>
