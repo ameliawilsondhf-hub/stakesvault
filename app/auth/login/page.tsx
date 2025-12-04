@@ -31,9 +31,6 @@ function getClientDeviceInfo() {
 }
 
 function LoginContent() {
-  // --- YOUR FULL ORIGINAL LOGIN CODE STARTS ---
-  // (NOT CHANGED ANYTHING)
-
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -44,18 +41,13 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [dark, setDark] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-const [show2FA, setShow2FA] = useState(false);
-const [tempToken, setTempToken] = useState("");
-const [twoFaOtp, setTwoFaOtp] = useState("");
-const [verifying2FA, setVerifying2FA] = useState(false);
-
-  // Ban popup states
+  const [show2FA, setShow2FA] = useState(false);
+  const [tempToken, setTempToken] = useState("");
+  const [twoFaOtp, setTwoFaOtp] = useState("");
+  const [verifying2FA, setVerifying2FA] = useState(false);
   const [showBanPopup, setShowBanPopup] = useState(false);
   const [bannedReason, setBannedReason] = useState("");
-
-  // 🔥 IP BLOCKING STATES
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockTimeRemaining, setBlockTimeRemaining] = useState(0);
   const [attemptsRemaining, setAttemptsRemaining] = useState(5);
@@ -65,20 +57,6 @@ const [verifying2FA, setVerifying2FA] = useState(false);
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!mounted) return;
-
-    const isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setDark(isDarkMode);
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = (e: MediaQueryListEvent) => setDark(e.matches);
-
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, [mounted]);
-
-  // Check URL for ban error
   useEffect(() => {
     if (!mounted) return;
     
@@ -98,7 +76,6 @@ const [verifying2FA, setVerifying2FA] = useState(false);
     }
   }, [mounted, searchParams]);
 
-  // 🔥 Countdown timer for blocked IP
   useEffect(() => {
     if (!isBlocked || blockTimeRemaining <= 0) return;
 
@@ -116,7 +93,6 @@ const [verifying2FA, setVerifying2FA] = useState(false);
     return () => clearInterval(interval);
   }, [isBlocked, blockTimeRemaining]);
 
-  // Track OAuth login
   useEffect(() => {
     const trackOAuthLogin = async () => {
       if (session && mounted) {
@@ -132,9 +108,8 @@ const [verifying2FA, setVerifying2FA] = useState(false);
                 provider: 'google'
               })
             });
-            console.log('✅ OAuth device tracked');
           } catch (error) {
-            console.error('⚠️ Device tracking failed (non-blocking):', error);
+            console.error('⚠️ Device tracking failed:', error);
           }
         }
       }
@@ -143,180 +118,139 @@ const [verifying2FA, setVerifying2FA] = useState(false);
     trackOAuthLogin();
   }, [session, mounted]);
 
-  const toggleDark = () => setDark(!dark);
-// ✅ STEP 3: VERIFY 2FA OTP HANDLER  (✅ SAHI JAGAH)
-const handleVerify2FA = async () => {
-  if (!twoFaOtp || !tempToken) {
-    setError("OTP required");
-    return;
-  }
-
-  setVerifying2FA(true);
-  setError("");
-
-  try {
-    const res = await fetch("/api/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        otp: twoFaOtp,
-        tempToken: tempToken,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setError(data.message || "Invalid OTP");
-      setVerifying2FA(false);
+  const handleVerify2FA = async () => {
+    if (!twoFaOtp || !tempToken) {
+      setError("OTP required");
       return;
     }
 
-    // ✅ OTP SUCCESS → LOGIN COMPLETE
-    setShow2FA(false);
-    setTwoFaOtp("");
-    setTempToken("");
-window.location.href = "/dashboard";
+    setVerifying2FA(true);
+    setError("");
 
-  } catch (err) {
-    console.error("2FA Verify Error:", err);
-    setError("OTP verification failed");
-  } finally {
-    setVerifying2FA(false);
-  }
-};
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          otp: twoFaOtp,
+          tempToken: tempToken,
+        }),
+      });
 
-  // 🔥 FINAL FIXED handleSubmit - NO DUPLICATES
-// Replace your entire handleSubmit function (lines ~165-323) with this:
+      const data = await res.json();
 
-// ✅ REPLACE YOUR handleSubmit FUNCTION WITH THIS (lines ~165-323)
-
-const handleSubmit = async (e: any) => {
-  e.preventDefault();
-  
-  // Check if blocked
-  if (isBlocked) {
-    setShowBlockedPopup(true);
-    return;
-  }
-
-  setError("");
-  setLoading(true);
-
-  try {
-    console.log("🔄 Sending login request...");
-
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json();
-    
-    console.log("📥 Login Response:", data);
-    console.log("✅ Success:", data.success);
-    console.log("🔐 Requires 2FA:", data.requires2FA);
-
-    // 🔥 HANDLE IP BLOCKING (429 status)
-    if (res.status === 429) {
-      console.log("🚫 IP Blocked");
-      setIsBlocked(true);
-      setBlockTimeRemaining(data.blockTimeRemaining * 60 || 3600);
-      setShowBlockedPopup(true);
-      setLoading(false);
-      return;
-    }
-
-    // ❌ HANDLE ERRORS (401, 403, etc)
-    if (!res.ok) {
-      console.log("❌ Login failed:", data.message);
-      
-      // Update remaining attempts
-      if (data.attemptsRemaining !== undefined) {
-        setAttemptsRemaining(data.attemptsRemaining);
+      if (!res.ok) {
+        setError(data.message || "Invalid OTP");
+        setVerifying2FA(false);
+        return;
       }
 
-      // Handle banned account
-      if (data?.banned) {
-        setBannedReason(data.reason || "Account banned");
-        setShowBanPopup(true);
+      setShow2FA(false);
+      setTwoFaOtp("");
+      setTempToken("");
+      window.location.href = "/dashboard";
+
+    } catch (err) {
+      console.error("2FA Verify Error:", err);
+      setError("OTP verification failed");
+    } finally {
+      setVerifying2FA(false);
+    }
+  };
+
+  const handleSubmit = async (e: any) => {
+    e.preventDefault();
+    
+    if (isBlocked) {
+      setShowBlockedPopup(true);
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 429) {
+        setIsBlocked(true);
+        setBlockTimeRemaining(data.blockTimeRemaining * 60 || 3600);
+        setShowBlockedPopup(true);
         setLoading(false);
         return;
       }
 
-      setError(data.message || "Login failed");
-      setLoading(false);
-      return;
-    }
+      if (!res.ok) {
+        if (data.attemptsRemaining !== undefined) {
+          setAttemptsRemaining(data.attemptsRemaining);
+        }
 
-    // ✅ CHECK IF 2FA REQUIRED
-    if (data.requires2FA === true && data.tempToken) {
-      console.log("🔐 2FA Required - Redirecting to OTP page");
-      setLoading(false);
-      
-      // Store email in session for OTP page
-      sessionStorage.setItem("userEmail", email);
-      
-      // Redirect to OTP verification page
-      window.location.href = `/auth/verify-otp?tempToken=${data.tempToken}`;
-      return;
-    }
+        if (data?.banned) {
+          setBannedReason(data.reason || "Account banned");
+          setShowBanPopup(true);
+          setLoading(false);
+          return;
+        }
 
-    // ✅ SUCCESS - NO 2FA (Direct Login)
-    if (data.success === true) {
-      console.log("✅ Login successful! No 2FA required");
-      
-      // Reset security counters
-      setAttemptsRemaining(5);
-      
-      // Store userId (important for dashboard)
-      if (data.userId) {
-        localStorage.setItem("userId", data.userId);
-        console.log("💾 UserId stored:", data.userId);
+        setError(data.message || "Login failed");
+        setLoading(false);
+        return;
       }
 
-      setSuccess(true);
-      setLoading(false);
-
-      // Track device (non-blocking)
-      const deviceInfo = getClientDeviceInfo();
-      if (deviceInfo) {
-        fetch('/api/admin/user/track-device', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...deviceInfo,
-            provider: 'credentials'
-          })
-        }).catch(err => console.error('⚠️ Device tracking failed:', err));
+      if (data.requires2FA === true && data.tempToken) {
+        setLoading(false);
+        sessionStorage.setItem("userEmail", email);
+        window.location.href = `/auth/verify-otp?tempToken=${data.tempToken}`;
+        return;
       }
 
-      // ✅ WAIT FOR COOKIE TO BE SET, THEN REDIRECT
-      console.log("🔄 Redirecting to dashboard in 800ms...");
-     // CHANGE FROM 800 to 2000
-setTimeout(() => {
-  console.log("🚀 Navigating to /dashboard");
-  window.location.href = "/dashboard";
-}, 2000); // ✅ 2 seconds delay
-      
-      return;
+      if (data.success === true) {
+        setAttemptsRemaining(5);
+        
+        if (data.userId) {
+          localStorage.setItem("userId", data.userId);
+        }
+
+        setSuccess(true);
+        setLoading(false);
+
+        const deviceInfo = getClientDeviceInfo();
+        if (deviceInfo) {
+          fetch('/api/admin/user/track-device', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...deviceInfo,
+              provider: 'credentials'
+            })
+          }).catch(err => console.error('⚠️ Device tracking failed:', err));
+        }
+
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 2000);
+        
+        return;
+      }
+
+      setError("Unexpected response from server");
+      setLoading(false);
+
+    } catch (e) {
+      console.error("❌ Login exception:", e);
+      setError("Server error. Please try again.");
+      setLoading(false);
     }
+  };
 
-    // Fallback error
-    console.error("⚠️ Unexpected response:", data);
-    setError("Unexpected response from server");
-    setLoading(false);
-
-  } catch (e) {
-    console.error("❌ Login exception:", e);
-    setError("Server error. Please try again.");
-    setLoading(false);
-  }
-};
-  // 🔥 Format countdown timer
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -326,156 +260,144 @@ setTimeout(() => {
   if (!mounted) return null;
 
   return (
-<div className="min-h-screen w-full bg-[#050b16] flex items-center justify-center px-3 py-6 text-white">
-
-
-
-  {/* 🔥 PROFESSIONAL IP BLOCKED POPUP */}
-{/* 🔥 PROFESSIONAL IP BLOCKED POPUP - WITH CLICKABLE FORGOT PASSWORD */}
-{showBlockedPopup && isBlocked && (
-  <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-[9999] animate-fade-in px-4">
-    <div className="bg-white dark:bg-[#1a1f2e] rounded-2xl shadow-2xl p-8 w-full max-w-lg border-2 border-red-500 dark:border-red-600 relative overflow-hidden">
+    <div className="min-h-[100svh] bg-[#0d1117] flex items-center justify-center px-4 py-6 relative overflow-hidden">
       
-      {/* Animated background */}
-      <div className="absolute -inset-1 bg-gradient-to-r from-red-500 via-orange-500 to-red-500 rounded-2xl blur-2xl opacity-30 animate-pulse"></div>
-
-<div className="relative z-10 text-sm leading-snug">
-
-        <div className="flex justify-center mb-5">
-          <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center animate-bounce">
-            <span className="text-5xl">🔒</span>
-          </div>
-        </div>
-
-        {/* Title */}
-        <h2 className="text-2xl font-bold text-center text-red-600 dark:text-red-400 mb-3">
-          Account Temporarily Locked
-        </h2>
-
-        {/* Subtitle */}
-        <p className="text-center text-gray-700 dark:text-gray-300 text-base mb-6 leading-relaxed">
-          For security reasons, access to your account has been temporarily restricted due to multiple failed login attempts.
-        </p>
-
-        {/* Countdown Timer */}
-        <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-6 mb-6 text-center">
-          <p className="text-sm text-red-700 dark:text-red-300 font-semibold mb-3">
-            Time Until Access Restoration
-          </p>
-          <div className="text-6xl font-bold text-red-600 dark:text-red-400 mb-2 font-mono tabular-nums">
-            {formatTime(blockTimeRemaining)}
-          </div>
-          <p className="text-xs text-red-600 dark:text-red-400 font-medium">
-            minutes : seconds
-          </p>
-        </div>
-
-        {/* Security Info */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl flex-shrink-0">🛡️</span>
-            <div>
-              <p className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
-                Automated Security Protection
-              </p>
-              <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed">
-                This is an automated security measure activated after 5 consecutive failed login attempts 
-                within a 5-minute period. This helps protect your account from unauthorized access and 
-                brute-force attacks.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* 🔥 FIXED: Help Information with Clickable Link */}
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="text-xl flex-shrink-0">🔑</span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Forgot your password?
-              </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                You can reset your credentials securely while waiting for access restoration.
-              </p>
-              <Link
-                href="/auth/forgot-password"
-                onClick={() => setShowBlockedPopup(false)}
-                className="inline-flex items-center gap-2 text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:gap-3 transition-all"
-              >
-                <svg 
-                  className="w-4 h-4" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" 
-                  />
-                </svg>
-                Reset Password Now
-                <svg 
-                  className="w-3 h-3" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M9 5l7 7-7 7" 
-                  />
-                </svg>
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Button */}
-        <button
-          onClick={() => setShowBlockedPopup(false)}
-          className="w-full py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-red-600 to-orange-600 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
-        >
-          I Understand
-        </button>
-
-        {/* Support Link */}
-        <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-5">
-          Need immediate assistance? Contact{" "}
-          <a 
-            href="mailto:support@stakevault.com" 
-            className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
-          >
-            support@stakevault.com
-          </a>
-        </p>
+      {/* Professional Dark Background with Visible Gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-950/12 via-purple-950/8 to-transparent"></div>
+      
+      {/* Grid Pattern - Visible */}
+      <div className="absolute inset-0 opacity-[0.025]" style={{
+        backgroundImage: 'linear-gradient(rgba(99, 102, 241, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(99, 102, 241, 0.5) 1px, transparent 1px)',
+        backgroundSize: '60px 60px'
+      }}></div>
+      
+      {/* Visible Animated Glow Effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute w-[500px] h-[500px] bg-blue-500/[0.06] rounded-full blur-[120px] -top-48 -left-48 animate-pulse-slow"></div>
+        <div className="absolute w-[400px] h-[400px] bg-purple-500/[0.05] rounded-full blur-[100px] top-1/2 -right-32 animate-pulse-slower"></div>
+        <div className="absolute w-[450px] h-[450px] bg-indigo-500/[0.06] rounded-full blur-[110px] -bottom-32 left-1/4 animate-pulse-slow"></div>
       </div>
-    </div>
-  </div>
-)}
-      {/* Ban Popup */}
-      {showBanPopup && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] animate-fade-in">
-          <div className="bg-white dark:bg-[#1f2533] rounded-2xl shadow-2xl p-8 w-[90%] max-w-md border border-gray-300 dark:border-gray-700 relative animate-bounce-slow">
 
+      {/* Visible Logo Watermarks - Professional Preview */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Spinning logos with visible effect */}
+        <img src="/stakevault.png" className="absolute w-[250px] md:w-[350px] top-10 left-10 opacity-[0.08] brightness-75 animate-spin-very-slow" alt="" />
+        <img src="/stakevault.png" className="absolute w-[220px] md:w-[300px] bottom-10 right-10 opacity-[0.08] brightness-75 animate-spin-very-slow-reverse" alt="" />
+        <img src="/stakevault.png" className="absolute w-[200px] md:w-[280px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.06] brightness-70 animate-spin-very-slow" alt="" />
+        <img src="/stakevault.png" className="absolute w-[180px] md:w-[240px] top-1/4 right-1/4 opacity-[0.05] brightness-70 animate-spin-very-slow-reverse" alt="" />
+        <img src="/stakevault.png" className="absolute w-[190px] md:w-[260px] bottom-1/4 left-1/4 opacity-[0.05] brightness-70 animate-spin-very-slow" alt="" />
+      </div>
+
+      {showBlockedPopup && isBlocked && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-[9999] animate-fade-in px-4">
+          <div className="bg-[#161b22] rounded-2xl shadow-2xl p-8 w-full max-w-lg border-2 border-red-500 relative overflow-hidden">
+            
+            <div className="absolute -inset-1 bg-gradient-to-r from-red-500 via-orange-500 to-red-500 rounded-2xl blur-2xl opacity-30 animate-pulse"></div>
+
+            <div className="relative z-10">
+              <div className="flex justify-center mb-5">
+                <div className="w-20 h-20 rounded-full bg-red-900/30 flex items-center justify-center animate-bounce">
+                  <span className="text-5xl">🔒</span>
+                </div>
+              </div>
+
+              <h2 className="text-2xl font-bold text-center text-red-400 mb-3">
+                Account Temporarily Locked
+              </h2>
+
+              <p className="text-center text-gray-300 text-base mb-6 leading-relaxed">
+                For security reasons, access to your account has been temporarily restricted due to multiple failed login attempts.
+              </p>
+
+              <div className="bg-red-900/20 border-2 border-red-700 rounded-xl p-6 mb-6 text-center">
+                <p className="text-sm text-red-300 font-semibold mb-3">
+                  Time Until Access Restoration
+                </p>
+                <div className="text-6xl font-bold text-red-400 mb-2 font-mono tabular-nums">
+                  {formatTime(blockTimeRemaining)}
+                </div>
+                <p className="text-xs text-red-400 font-medium">
+                  minutes : seconds
+                </p>
+              </div>
+
+              <div className="bg-blue-900/20 border border-blue-700 rounded-xl p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl flex-shrink-0">🛡️</span>
+                  <div>
+                    <p className="text-sm font-semibold text-blue-300 mb-2">
+                      Automated Security Protection
+                    </p>
+                    <p className="text-xs text-blue-400 leading-relaxed">
+                      This is an automated security measure activated after 5 consecutive failed login attempts 
+                      within a 5-minute period.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-800/50 rounded-xl p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0">🔑</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-gray-300 mb-2">
+                      Forgot your password?
+                    </p>
+                    <p className="text-xs text-gray-400 mb-3">
+                      You can reset your credentials securely while waiting for access restoration.
+                    </p>
+                    <Link
+                      href="/auth/forgot-password"
+                      onClick={() => setShowBlockedPopup(false)}
+                      className="inline-flex items-center gap-2 text-sm font-bold text-blue-400 hover:text-blue-300 transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                      Reset Password Now
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowBlockedPopup(false)}
+                className="w-full py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-red-600 to-orange-600 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >
+                I Understand
+              </button>
+
+              <p className="text-center text-xs text-gray-400 mt-5">
+                Need immediate assistance? Contact{" "}
+                <a href="mailto:support@stakevault.com" className="text-blue-400 hover:underline font-medium">
+                  support@stakevault.com
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBanPopup && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-[9999] animate-fade-in px-4">
+          <div className="bg-[#161b22] rounded-2xl shadow-2xl p-8 w-full max-w-md border-2 border-red-500 relative">
             <div className="absolute -inset-1 bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 rounded-2xl blur-lg opacity-30"></div>
 
             <div className="relative z-10 text-center">
               <div className="text-6xl mb-3 animate-pulse">⛔</div>
 
-              <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">
+              <h2 className="text-2xl font-bold text-red-400 mb-2">
                 Account Banned
               </h2>
 
-              <p className="text-gray-700 dark:text-gray-300 text-sm mb-4">
+              <p className="text-gray-300 text-sm mb-4">
                 Your account has been banned by the administration.
               </p>
 
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm mb-6 animate-shake">
+              <div className="bg-red-900/20 border border-red-700 text-red-300 px-4 py-3 rounded-xl text-sm mb-6">
                 <b>Reason:</b> {bannedReason}
               </div>
 
@@ -489,356 +411,280 @@ setTimeout(() => {
           </div>
         </div>
       )}
-{show2FA && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999]">
-    <div className="bg-white dark:bg-[#111827] p-8 rounded-2xl shadow-2xl w-[90%] max-w-sm">
-      
-      <h2 className="text-xl font-bold text-center mb-4 text-gray-800 dark:text-white">
-        🔐 Two Factor Authentication
-      </h2>
 
-      <input
-        type="text"
-        placeholder="Enter 6 digit OTP"
-        value={twoFaOtp}
-        onChange={(e) => setTwoFaOtp(e.target.value)}
-        className="w-full p-3 border rounded-xl mb-4 text-center text-lg"
-      />
+      {show2FA && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-[9999] px-4">
+          <div className="bg-[#161b22] p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-[#30363d]">
+            
+            <h2 className="text-xl font-bold text-center mb-4 text-white">
+              🔐 Two Factor Authentication
+            </h2>
 
-      {error && (
-        <div className="text-red-500 text-sm mb-3 text-center">
-          {error}
+            <input
+              type="text"
+              placeholder="Enter 6 digit OTP"
+              value={twoFaOtp}
+              onChange={(e) => setTwoFaOtp(e.target.value)}
+              className="w-full p-3 border border-[#30363d] bg-[#0d1117] text-white rounded-xl mb-4 text-center text-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+
+            {error && (
+              <div className="text-red-400 text-sm mb-3 text-center bg-red-900/20 border border-red-700 px-4 py-2 rounded-xl">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleVerify2FA}
+              disabled={verifying2FA}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all"
+            >
+              {verifying2FA ? "Verifying..." : "Verify OTP"}
+            </button>
+
+          </div>
         </div>
       )}
 
-      <button
-        onClick={handleVerify2FA}
-        disabled={verifying2FA}
-        className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold"
-      >
-        {verifying2FA ? "Verifying..." : "Verify OTP"}
-      </button>
-
-    </div>
-  </div>
-)}
-
-      {/* Main Login Page */}
-<div className="min-h-screen w-full bg-[#020617] flex items-center justify-center px-4 py-6 text-white relative">
-
-        {/* Animated Background Orbs */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <img src="/stakevault.png" className="rotate-bg absolute w-[300px] top-10 left-10" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[260px] top-40 right-20" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[220px] bottom-20 left-1/4" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[200px] top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[280px] bottom-10 right-10" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[240px] top-1/3 left-1/2" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[180px] bottom-1/3 left-10" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[260px] bottom-1/4 right-1/3" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[300px] top-1/4 right-1/4" alt="" />
-          <img src="/stakevault.png" className="rotate-bg absolute w-[230px] top-2/3 left-1/3" alt="" />
-
-          <div className="absolute w-[600px] h-[600px] bg-gradient-to-r from-blue-400 to-cyan-300 dark:from-blue-600 dark:to-cyan-500 opacity-20 rounded-full blur-3xl -top-32 -left-32 animate-float"></div>
-          <div className="absolute w-[500px] h-[500px] bg-gradient-to-r from-purple-400 to-pink-300 dark:from-purple-600 dark:to-pink-500 opacity-20 rounded-full blur-3xl top-1/3 -right-32 animate-float-slow"></div>
-          <div className="absolute w-[400px] h-[400px] bg-gradient-to-r from-indigo-400 to-blue-300 dark:from-indigo-600 dark:to-blue-500 opacity-15 rounded-full blur-3xl -bottom-32 left-1/4 animate-float-reverse"></div>
-        </div>
-
-        {/* Login Card */}
+      <div className="relative bg-[#161b22] backdrop-blur-xl shadow-2xl rounded-xl md:rounded-2xl p-6 md:p-8 w-full max-w-[calc(100%-2rem)] md:max-w-[480px] border border-[#30363d] z-10">
         
-<div className="relative w-full max-w-[360px] bg-[#0a1220] border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.9)] rounded-2xl px-5 py-7 z-10">
+        <div className="absolute -inset-[1px] bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-transparent rounded-xl md:rounded-2xl blur-xl"></div>
 
-          <div className="absolute -inset-1 bg-gradient-to-r from-[#0f172a] via-[#1e293b] to-[#0f172a] rounded-3xl blur-lg opacity-25 dark:opacity-30 animate-pulse-slow"></div>
+        <div className="relative z-10">
+          
+          <div className="text-center mb-5">
+            <div className="relative inline-block mb-3">
+              <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-2xl animate-pulse-slow"></div>
+              
+              <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 mx-auto rounded-full overflow-hidden shadow-xl border-2 border-[#30363d]">
+                <img
+                  src="/stakevault.png"
+                  alt="StakeVault Logo"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+            
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-1">
+              StakeVault
+            </h1>
+            <p className="text-gray-400 text-xs sm:text-sm flex items-center justify-center gap-1.5">
+              <span>🔒</span>
+              Secure login to your account
+            </p>
+          </div>
 
-          {/* Dark Mode Toggle */}
-          <button
-            onClick={toggleDark}
-            className="absolute right-5 top-5 p-2.5 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:scale-110 hover:rotate-12 transition-all shadow-md z-20"
-          >
-            {dark ? "☀️" : "🌙"}
-          </button>
-
-<div className="relative z-10 text-sm sm:text-base leading-snug">
-
-            <div className="text-center mb-8">
-              <div className="relative inline-block mb-4">
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-teal-400 to-cyan-400 rounded-full blur-2xl opacity-50 animate-pulse-slow scale-110"></div>
-
-                <div className="relative w-24 h-24 mx-auto rounded-full overflow-hidden shadow-2xl animate-bounce-slow">
-                  <img
-                    src="/stakevault.png"
-                    alt="StakeVault Logo"
-                    className="w-full h-full object-cover"
-                  />
+          {attemptsRemaining < 5 && attemptsRemaining > 0 && !isBlocked && (
+            <div className={`mb-4 p-3.5 sm:p-4 rounded-xl border-2 ${
+              attemptsRemaining <= 2 
+                ? 'bg-red-900/20 border-red-600'
+                : 'bg-orange-900/20 border-orange-600'
+            }`}>
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <span className="text-2xl sm:text-3xl flex-shrink-0">
+                  {attemptsRemaining <= 2 ? '🚨' : '⚠️'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-bold text-xs sm:text-sm ${
+                    attemptsRemaining <= 2 
+                      ? 'text-red-300'
+                      : 'text-orange-300'
+                  }`}>
+                    {attemptsRemaining <= 2 ? 'Critical Security Alert' : 'Security Alert'}
+                  </p>
+                  <p className={`text-[10px] sm:text-xs mt-1 ${
+                    attemptsRemaining <= 2 
+                      ? 'text-red-400'
+                      : 'text-orange-400'
+                  }`}>
+                    <span className="font-bold text-base sm:text-lg">{attemptsRemaining}</span> {attemptsRemaining === 1 ? 'attempt' : 'attempts'} remaining 
+                    before temporary lockout.
+                  </p>
                 </div>
               </div>
+              <div className="mt-2.5 sm:mt-3 bg-black/30 rounded-full h-2 sm:h-2.5 overflow-hidden shadow-inner">
+                <div 
+                  className={`h-full transition-all duration-500 ${
+                    attemptsRemaining <= 2 
+                      ? 'bg-gradient-to-r from-red-600 to-red-500' 
+                      : 'bg-gradient-to-r from-orange-500 to-yellow-500'
+                  }`}
+                  style={{ width: `${(attemptsRemaining / 5) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
 
-<h1 className="text-2xl sm:text-4xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
-                🔒 Secure login to your account
-              </p>
+          <form onSubmit={handleSubmit} className="space-y-3.5">
+            
+            <div>
+              <label className="text-xs sm:text-sm font-medium text-gray-300 mb-1.5 block">
+                Email Address
+              </label>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                className="w-full border border-[#30363d] bg-[#0d1117] text-white p-3 sm:p-3.5 rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-gray-500 hover:border-[#484f58]"
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading || isBlocked}
+              />
             </div>
 
-            {/* 🔥 ATTEMPTS WARNING BANNER */}
-       {/* 🔥 PROFESSIONAL ATTEMPTS WARNING BANNER */}
-{attemptsRemaining < 5 && attemptsRemaining > 0 && !isBlocked && (
-  <div className={`mb-5 p-4 rounded-xl border-2 ${
-    attemptsRemaining <= 2 
-      ? 'bg-red-50 dark:bg-red-900/20 border-red-400 dark:border-red-600'
-      : 'bg-orange-50 dark:bg-orange-900/20 border-orange-400 dark:border-orange-600'
-  }`}>
-    <div className="flex items-center gap-3">
-      <span className="text-3xl">
-        {attemptsRemaining <= 2 ? '🚨' : '⚠️'}
-      </span>
-      <div className="flex-1">
-        <p className={`font-bold text-sm ${
-          attemptsRemaining <= 2 
-            ? 'text-red-700 dark:text-red-300'
-            : 'text-orange-700 dark:text-orange-300'
-        }`}>
-          {attemptsRemaining <= 2 ? 'Critical: Account Security Alert' : 'Security Alert'}
-        </p>
-        <p className={`text-xs mt-1 ${
-          attemptsRemaining <= 2 
-            ? 'text-red-600 dark:text-red-400'
-            : 'text-orange-600 dark:text-orange-400'
-        }`}>
-          {attemptsRemaining === 1 ? (
-            <>
-              <span className="font-bold text-lg">{attemptsRemaining}</span> attempt remaining. 
-              Account will be temporarily locked after next failed login.
-            </>
-          ) : attemptsRemaining === 2 ? (
-            <>
-              Only <span className="font-bold text-lg">{attemptsRemaining}</span> attempts remaining 
-              before temporary account lockout for security.
-            </>
-          ) : (
-            <>
-              <span className="font-bold text-lg">{attemptsRemaining}</span> login attempts remaining 
-              before security lockout (60 minutes).
-            </>
-          )}
-        </p>
-        <p className="text-xs mt-2 opacity-75">
-          Multiple failed attempts may indicate unauthorized access. Please verify your credentials.
-        </p>
-      </div>
-    </div>
-    <div className="mt-3 bg-white/50 dark:bg-black/30 rounded-full h-2.5 overflow-hidden shadow-inner">
-      <div 
-        className={`h-full transition-all duration-500 ${
-          attemptsRemaining <= 2 
-            ? 'bg-gradient-to-r from-red-600 to-red-500' 
-            : 'bg-gradient-to-r from-orange-500 to-yellow-500'
-        }`}
-        style={{ width: `${(attemptsRemaining / 5) * 100}%` }}
-      ></div>
-    </div>
-  </div>
-)}
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
-
-              <div>
-                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                  Email Address
-                </label>
+            <div>
+              <label className="text-xs sm:text-sm font-medium text-gray-300 mb-1.5 block">
+                Password
+              </label>
+              <div className="relative">
                 <input
-                  type="email"
-                  placeholder="Enter your email"
-className="w-full border border-white/10 bg-[#020617] text-white placeholder-gray-400 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-
-                  onChange={(e) => setEmail(e.target.value)}
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  className="w-full border border-[#30363d] bg-[#0d1117] text-white p-3 sm:p-3.5 rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-12 placeholder:text-gray-500 hover:border-[#484f58]"
+                  onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={loading || isBlocked}
                 />
-              </div>
-
-              <div>
-                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-className="w-full bg-[#020617] border border-white/15 text-white placeholder-gray-400 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading || isBlocked}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
-                    disabled={isBlocked}
-                  >
-                    {showPassword ? "👁️" : "👁️‍🗨️"}
-                  </button>
-                </div>
-              </div>
-
-              {error && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl text-sm text-center animate-shake">
-                  ⚠️ {error}
-                </div>
-              )}
-
-              {success && (
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-xl text-sm text-center animate-pulse">
-                  ✓ Login Successful! Redirecting...
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading || isBlocked}
-                className={`w-full p-3.5 rounded-xl font-bold shadow-lg transition-all ${
-                  isBlocked
-                    ? 'bg-gray-400 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:scale-[1.02] active:scale-[.98]'
-                } ${loading ? 'opacity-50' : ''}`}
-              >
-                {isBlocked ? '🔒 Account Temporarily Locked' : loading ? "Logging in..." : "Login"}
-              </button>
-
-              <div className="text-center">
-                <Link
-                  href="/auth/forgot-password"
-                  className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 hover:underline"
-
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition text-xl"
+                  disabled={isBlocked}
                 >
-                  Forgot your password?
-                </Link>
-              </div>
-            </form>
-
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-<span className="px-4 bg-[#020617] text-gray-400">
-
-                </span>
+                  {showPassword ? "👁️" : "👁️‍🗨️"}
+                </button>
               </div>
             </div>
 
-            {/* Social Login Buttons */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              <button
-                type="button"
-                onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
-                disabled={isBlocked}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#020617] border border-white/10
-gray-700 rounded-xl shadow-sm hover:scale-105 transition-all text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            <div className="text-right">
+              <Link 
+                href="/auth/forgot-password"
+                className="text-xs sm:text-sm text-blue-500 hover:text-blue-400 font-medium transition"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-                Facebook
-              </button>
-
-              <button
-                type="button"
-                onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-                disabled={isBlocked}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#020617] border border-white/10
-gray-700 rounded-xl shadow-sm hover:scale-105 transition-all text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-                  <path fill="#0b0a0a6b" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                </svg>
-                Google
-              </button>
+                Forgot your password?
+              </Link>
             </div>
 
-            <div className="text-center">
-              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                New to StakeVault?{" "}
-                <Link
-                  href="/auth/register"
-                  className="text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700"
-                >
-                  Create an account
-                </Link>
-              </p>
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm text-center">
+                ⚠️ {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-xl text-sm text-center animate-pulse">
+                ✓ Login Successful! Redirecting...
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || isBlocked}
+              className={`w-full p-3.5 sm:p-4 rounded-lg font-semibold text-sm sm:text-base shadow-lg transition-all ${
+                isBlocked
+                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.01] active:scale-[0.99]'
+              } ${loading ? 'opacity-50' : ''}`}
+            >
+              {isBlocked ? '🔒 Account Temporarily Locked' : loading ? "Logging in..." : "Login"}
+            </button>
+
+          </form>
+
+          <div className="relative my-4 sm:my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[#30363d]"></div>
+            </div>
+            <div className="relative flex justify-center text-xs sm:text-sm">
+              <span className="px-3 sm:px-4 bg-[#161b22] text-gray-400">Or continue with</span>
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
+            <button
+              type="button"
+              onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
+              disabled={isBlocked}
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0d1117] border border-[#30363d] rounded-lg hover:bg-[#161b22] hover:border-[#484f58] transition-all text-xs sm:text-sm font-medium text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                className="sm:w-[18px] sm:h-[18px]"
+                fill="#1877F2"
+              >
+                <path d="M22.675 0H1.325C.593 0 0 .593 0 1.325v21.351C0 23.407.593 24 1.325 24h11.495v-9.294H9.691V11.01h3.129V8.414c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.716-1.795 1.764v2.316h3.587l-.467 3.696h-3.12V24h6.116C23.407 24 24 23.407 24 22.675V1.325C24 .593 23.407 0 22.675 0z"/>
+              </svg>
+              <span className="hidden xs:inline">Facebook</span>
+              <span className="xs:hidden">FB</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+              disabled={isBlocked}
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0d1117] border border-[#30363d] rounded-lg hover:bg-[#161b22] hover:border-[#484f58] transition-all text-xs sm:text-sm font-medium text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg width="16" height="16" className="sm:w-[18px] sm:h-[18px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6C44.4 38.6 46.98 32.42 46.98 24.55z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+              Google
+            </button>
+          </div>
+
+          <div className="text-center mb-3 sm:mb-4">
+            <p className="text-gray-400 text-xs sm:text-sm">
+              New to StakeVault?{" "}
+              <Link 
+                href="/auth/register"
+                className="text-blue-500 hover:text-blue-400 font-medium transition"
+              >
+                Create an account
+              </Link>
+            </p>
+          </div>
+
+          <div className="text-center text-[10px] sm:text-xs text-gray-500">
+            © {new Date().getFullYear()} StakeVault • All Rights Reserved
+          </div>
         </div>
-
-        <style jsx>{`
-          @keyframes rotate-logo-bg {
-            0% { transform: rotate(0deg) scale(1); }
-            100% { transform: rotate(360deg) scale(1); }
-          }
-
-          .rotate-bg {
-            animation: rotate-logo-bg 45s linear infinite;
-            opacity: 0.05;
-          }
-
-          @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
-          }
-          .animate-shake {
-            animation: shake 0.5s ease-in-out;
-          }
-          @keyframes float {
-            0%, 100% { transform: translate(0, 0); }
-            50% { transform: translate(30px, -30px); }
-          }
-          .animate-float {
-            animation: float 20s ease-in-out infinite;
-          }
-          @keyframes float-slow {
-            0%, 100% { transform: translate(0, 0); }
-            50% { transform: translate(-20px, 20px); }
-          }
-          .animate-float-slow {
-            animation: float-slow 25s ease-in-out infinite;
-          }
-          @keyframes float-reverse {
-        0%, 100% { transform: translate(0, 0); }
-            50% { transform: translate(40px, 40px); }
-          }
-          .animate-float-reverse {
-            animation: float-reverse 30s ease-in-out infinite;
-          }
-          @keyframes fade-in {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fade-in {
-            animation: fade-in 0.6s ease-out;
-          }
-          @keyframes bounce-slow {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-          }
-          .animate-bounce-slow {
-            animation: bounce-slow 3s ease-in-out infinite;
-          }
-          @keyframes pulse-slow {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-          }
-          .animate-pulse-slow {
-            animation: pulse-slow 3s ease-in-out infinite;
-          }
-        `}</style>
       </div>
+
+      <style jsx>{`
+        @keyframes spin-very-slow {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes spin-very-slow-reverse {
+          0% { transform: rotate(360deg); }
+          100% { transform: rotate(0deg); }
+        }
+
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.08; transform: scale(1); }
+          50% { opacity: 0.12; transform: scale(1.05); }
+        }
+        
+        @keyframes pulse-slower {
+          0%, 100% { opacity: 0.06; transform: scale(1); }
+          50% { opacity: 0.10; transform: scale(1.03); }
+        }
+        
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .animate-spin-very-slow { animation: spin-very-slow 60s linear infinite; }
+        .animate-spin-very-slow-reverse { animation: spin-very-slow-reverse 60s linear infinite; }
+        .animate-pulse-slow { animation: pulse-slow 4s ease-in-out infinite; }
+        .animate-pulse-slower { animation: pulse-slower 5s ease-in-out infinite; }
+        .animate-fade-in { animation: fade-in 0.6s ease-out; }
+      `}</style>
     </div>
   );
 }
