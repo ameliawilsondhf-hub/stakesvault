@@ -63,9 +63,15 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!lockPeriod || ![30, 60, 90].includes(parseInt(lockPeriod))) {
+    // ✅ UPDATED: Support all lock periods (30 days to 5 years)
+    const validLockPeriods = [30, 60, 90, 120, 180, 270, 365, 730, 1095, 1460, 1825];
+    if (!lockPeriod || !validLockPeriods.includes(parseInt(lockPeriod))) {
       return NextResponse.json(
-        { success: false, message: "Invalid lock period. Must be 30, 60, or 90 days." },
+        { 
+          success: false, 
+          message: "Invalid lock period. Please select a valid duration.",
+          validOptions: validLockPeriods
+        },
         { status: 400 }
       );
     }
@@ -110,6 +116,18 @@ export async function POST(req: Request) {
     const unlockDate = new Date(now);
     unlockDate.setDate(unlockDate.getDate() + parseInt(lockPeriod));
 
+    // ✅ Calculate simple interest details
+    const dailyProfit = amount * 0.01;
+    const totalProfit = dailyProfit * parseInt(lockPeriod);
+    const expectedFinalAmount = amount + totalProfit;
+    const totalReturn = parseInt(lockPeriod); // 1% × days
+
+    console.log("📊 Simple Interest Calculation:");
+    console.log("   Daily Profit: $" + dailyProfit.toFixed(2));
+    console.log("   Total Profit: $" + totalProfit.toFixed(2));
+    console.log("   Expected Final: $" + expectedFinalAmount.toFixed(2));
+    console.log("   Total Return: " + totalReturn + "%");
+
     // 10. Create Stake record in Stake model
     const stake = await Stake.create({
       userId: userId,
@@ -145,7 +163,7 @@ export async function POST(req: Request) {
       // Don't fail the stake if email fails
     }
 
-    // 12. Return success
+    // 12. Return success with simple interest details
     return NextResponse.json({
       success: true,
       message: "Staking successful! You will receive a confirmation email shortly.",
@@ -159,7 +177,13 @@ export async function POST(req: Request) {
           startDate: stake.startDate,
           unlockDate: stake.unlockDate,
           status: stake.status,
-          cycle: stake.cycle
+          cycle: stake.cycle,
+          // ✅ NEW: Simple interest details
+          dailyReward: dailyProfit.toFixed(2),
+          totalProfit: totalProfit.toFixed(2),
+          expectedFinal: expectedFinalAmount.toFixed(2),
+          totalReturn: totalReturn,
+          interestType: "simple"
         }
       }
     }, { status: 201 });

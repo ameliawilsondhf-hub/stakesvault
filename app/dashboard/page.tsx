@@ -699,10 +699,8 @@ const Animations: FC = () => {
     `}</style>
   );
 }
-// DashboardPage component ke baad (line 438 ke baad)
-
 // --------------------------------------------------------------------------------------------------
-// STAKING PLANS SECTION COMPONENT
+// STAKING PLANS SECTION COMPONENT - SIMPLE INTEREST (NO COMPOUNDING)
 // --------------------------------------------------------------------------------------------------
 
 const StakingPlansSection = () => {
@@ -717,7 +715,7 @@ const StakingPlansSection = () => {
       maxInvestment: 100,
       dailyReturn: 1.0,
       duration: 30,
-      totalReturn: 34.78, // 1% daily compounding for 30 days: (1.01^30 - 1) * 100
+      totalReturn: 30, // Simple: 1% × 30 days = 30%
       color: "from-green-500 to-emerald-600",
       borderColor: "border-green-500/30",
       popular: false
@@ -730,7 +728,7 @@ const StakingPlansSection = () => {
       maxInvestment: 500,
       dailyReturn: 1.0,
       duration: 60,
-      totalReturn: 81.67, // 1% daily compounding for 60 days: (1.01^60 - 1) * 100
+      totalReturn: 60, // Simple: 1% × 60 days = 60%
       color: "from-blue-500 to-cyan-600",
       borderColor: "border-blue-500/30",
       popular: true
@@ -743,7 +741,7 @@ const StakingPlansSection = () => {
       maxInvestment: 2000,
       dailyReturn: 1.0,
       duration: 90,
-      totalReturn: 144.86, // 1% daily compounding for 90 days: (1.01^90 - 1) * 100
+      totalReturn: 90, // Simple: 1% × 90 days = 90%
       color: "from-purple-500 to-pink-600",
       borderColor: "border-purple-500/30",
       popular: false
@@ -756,7 +754,7 @@ const StakingPlansSection = () => {
       maxInvestment: 10000,
       dailyReturn: 1.0,
       duration: 120,
-      totalReturn: 230.04, // 1% daily compounding for 120 days: (1.01^120 - 1) * 100
+      totalReturn: 120, // Simple: 1% × 120 days = 120%
       color: "from-amber-500 to-orange-600",
       borderColor: "border-amber-500/30",
       popular: false
@@ -767,14 +765,7 @@ const StakingPlansSection = () => {
     { icon: "🔒", text: "Secure & Encrypted" },
     { icon: "⚡", text: "Instant Activation" },
     { icon: "💰", text: "Daily Payouts" },
-    { icon: "🔄", text: "Auto Re-stake Option" }
-  ];
-
-  const stats = [
-    { label: "Active Investors", value: "12,450+", icon: "👥" },
-    { label: "Total Staked", value: "$8.5M+", icon: "💵" },
-    { label: "Daily Payouts", value: "$85K+", icon: "💸" },
-    { label: "Success Rate", value: "99.8%", icon: "✅" }
+    { icon: "📊", text: "Transparent Returns" }
   ];
 
   return (
@@ -787,20 +778,6 @@ const StakingPlansSection = () => {
         <p className="text-white/70 text-lg max-w-2xl mx-auto">
           Select the perfect plan that matches your investment goals and start earning daily returns
         </p>
-      </div>
-
-      {/* Stats Section */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-        {stats.map((stat, index) => (
-          <div 
-            key={index}
-            className="p-4 rounded-xl bg-white/5 backdrop-blur-lg border border-white/10 text-center hover:bg-white/10 transition-all duration-300"
-          >
-            <div className="text-3xl mb-2">{stat.icon}</div>
-            <div className="text-2xl font-bold text-white">{stat.value}</div>
-            <div className="text-xs text-white/60 mt-1">{stat.label}</div>
-          </div>
-        ))}
       </div>
 
       {/* Plans Grid */}
@@ -853,7 +830,7 @@ const StakingPlansSection = () => {
                   <div className="text-4xl font-extrabold bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
                     {plan.dailyReturn}%
                   </div>
-                  <div className="text-sm text-white/60">Daily Return (Compounding)</div>
+                  <div className="text-sm text-white/60">Daily Return (Simple Interest)</div>
                 </div>
 
                 {/* Features */}
@@ -864,7 +841,7 @@ const StakingPlansSection = () => {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-white/70">Total Return</span>
-                    <span className="text-green-400 font-bold">≈{plan.totalReturn.toFixed(1)}%</span>
+                    <span className="text-green-400 font-bold">{plan.totalReturn}%</span>
                   </div>
                 </div>
 
@@ -904,19 +881,19 @@ const StakingPlansSection = () => {
             <ul className="space-y-3">
               <li className="flex items-start gap-3 text-white/80">
                 <span className="text-green-400 text-xl">✓</span>
-                <span>Industry-leading security with multi-layer encryption</span>
+                <span>Advanced security with encryption</span>
               </li>
               <li className="flex items-start gap-3 text-white/80">
                 <span className="text-green-400 text-xl">✓</span>
-                <span>Automated daily profit distribution to your wallet</span>
+                <span>Automated daily profit distribution</span>
               </li>
               <li className="flex items-start gap-3 text-white/80">
                 <span className="text-green-400 text-xl">✓</span>
-                <span>24/7 customer support with average 2-min response time</span>
+                <span>24/7 customer support available</span>
               </li>
               <li className="flex items-start gap-3 text-white/80">
                 <span className="text-green-400 text-xl">✓</span>
-                <span>Transparent blockchain-verified transactions</span>
+                <span>Transparent and simple returns</span>
               </li>
             </ul>
           </div>
@@ -925,10 +902,10 @@ const StakingPlansSection = () => {
             <div className="inline-block p-8 rounded-2xl bg-white/5 backdrop-blur-lg border border-white/20">
               <div className="text-5xl mb-3">🏆</div>
               <div className="text-3xl font-bold text-white mb-2">
-                2+ Years
+                Simple & Transparent
               </div>
               <div className="text-white/70">
-                Trusted by Investors Worldwide
+                No Hidden Fees
               </div>
             </div>
           </div>
@@ -941,7 +918,7 @@ const StakingPlansSection = () => {
           Ready to Start Your Journey? 🚀
         </h3>
         <p className="text-white/90 mb-6 max-w-2xl mx-auto">
-          Join thousands of successful investors who are earning passive income daily with StakeVault
+          Start earning daily returns with simple and transparent staking plans
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <button className="px-8 py-4 bg-white text-purple-600 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all">
@@ -955,4 +932,3 @@ const StakingPlansSection = () => {
     </div>
   );
 };
-

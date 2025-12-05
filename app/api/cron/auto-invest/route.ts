@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
-import User, { IUser } from "@/lib/models/user"; // ✅ IUser import kiya for typing
+import User, { IUser } from "@/lib/models/user";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// APY calculator
-function calculateAPY(lockPeriod: number): number {
-    const apy = (Math.pow(1.01, lockPeriod) - 1) * 100;
-    return parseFloat(apy.toFixed(2));
+// ✅ FIXED: Simple Interest Calculator
+function calculateTotalReturn(lockPeriod: number): number {
+    // Simple Interest: 1% per day × number of days
+    const totalReturn = lockPeriod * 1.0;
+    return parseFloat(totalReturn.toFixed(2));
 }
 
 export async function GET(req: Request) {
@@ -27,13 +28,13 @@ export async function GET(req: Request) {
 
         await connectDB();
 
-        console.log("🔄 Starting auto-invest cron job...");
+        console.log("🔄 Starting auto-invest cron job (SIMPLE INTEREST)...");
 
         // Find all users with auto-invest enabled
         const users = await User.find({
             autoInvestEnabled: true,
             "autoInvestSettings.enabled": true,
-        }) as IUser[]; // Type assertion for the array of users
+        }) as IUser[];
 
         console.log(`📊 Found ${users.length} users with auto-invest enabled`);
 
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
                         console.log(`⚠️ Stake amount $${stake.amount} is below minimum $${minAmount}, skipping`);
                         
                         // Just mark as completed, don't reinvest
-                        stake.status = "completed" as const; // Added 'as const'
+                        stake.status = "completed" as const;
                         continue;
                     }
 
@@ -72,7 +73,6 @@ export async function GET(req: Request) {
                     const finalAmount = stake.amount + (stake.earnedRewards || 0);
 
                     // Check if user has enough balance (should be in staked balance)
-                    // Note: This check might be redundant if the logic assumes the money is still linked to the old stake
                     if (user.stakedBalance < finalAmount) {
                         console.log(`⚠️ Insufficient staked balance for reinvestment`);
                         stake.status = "completed" as const;
@@ -86,32 +86,30 @@ export async function GET(req: Request) {
                     const unlockDate = new Date();
                     unlockDate.setDate(unlockDate.getDate() + lockPeriod);
 
+                    // ✅ Calculate simple interest return
+                    const totalReturn = calculateTotalReturn(lockPeriod);
+
                     const newStake = {
                         amount: finalAmount,
                         stakedAt: new Date(),
                         unlockDate: unlockDate,
                         lockPeriod: lockPeriod,
-                        // Fix: status must match IStake enum
                         status: "active" as const, 
-                        apy: calculateAPY(lockPeriod),
+                        apy: totalReturn, // ✅ Using simple interest total return
                         earnedRewards: 0,
-                        // Agar aap cycle use karte hain, toh isko add karein:
-                        // cycle: (stake as any).cycle, 
                     };
 
                     // Add new stake
-                    // ⭐ FIX: Use Mongoose array push method with type assertion to remove the error
                     (user.stakes as any).push(newStake);
 
                     // Mark old stake as completed
                     stake.status = "completed" as const;
 
-                    console.log(`✅ Auto-invested $${finalAmount} for ${lockPeriod} days (APY: ${newStake.apy}%)`);
+                    console.log(`✅ Auto-invested $${finalAmount} for ${lockPeriod} days (Total Return: ${totalReturn}%)`);
                     processedCount++;
                 }
 
                 // Save user
-                // user.save() will now track the array changes because of the push fix.
                 await user.save();
 
             } catch (error: any) {
@@ -122,12 +120,13 @@ export async function GET(req: Request) {
 
         const summary = {
             success: true,
-            message: "Auto-invest cron job completed",
+            message: "Auto-invest cron job completed (SIMPLE INTEREST)",
             stats: {
                 totalUsers: users.length,
                 stakesProcessed: processedCount,
                 errors: errorCount,
                 timestamp: new Date().toISOString(),
+                interestType: "simple" // ✅ Indicate simple interest
             },
         };
 

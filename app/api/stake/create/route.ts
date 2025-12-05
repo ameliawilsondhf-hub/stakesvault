@@ -9,17 +9,16 @@ import Stake from "@/lib/models/stake";
 import { emailService } from "@/lib/email-service";
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs'; // ✅ Add this
+export const runtime = 'nodejs';
 
-// APY calculator - Daily 1% Compounding
-function calculateAPY(lockPeriod: number): number {
-    const apy = (Math.pow(1.01, lockPeriod) - 1) * 100;
-    return parseFloat(apy.toFixed(2));
+// ✅ SIMPLE INTEREST - Daily 1% (No Compounding)
+function calculateTotalReturn(lockPeriod: number): number {
+    // Simple Interest: 1% per day × number of days
+    const totalReturn = lockPeriod * 1.0;
+    return parseFloat(totalReturn.toFixed(2));
 }
 
 export async function POST(req: Request) {
-  // ... rest of your code stays same
-
     try {
         await connectDB();
 
@@ -101,12 +100,14 @@ export async function POST(req: Request) {
             );
         }
 
-        if (!lockPeriod || ![30, 60, 90].includes(lockPeriod)) {
+        // ✅ UPDATED: Support all lock periods from frontend (30d to 5 years)
+        const validLockPeriods = [30, 60, 90, 120, 180, 270, 365, 730, 1095, 1460, 1825];
+        if (!lockPeriod || !validLockPeriods.includes(lockPeriod)) {
             return NextResponse.json(
                 { 
                     success: false, 
-                    message: "Invalid lock period. Must be 30, 60, or 90 days.",
-                    validOptions: [30, 60, 90]
+                    message: "Invalid lock period. Please select a valid duration.",
+                    validOptions: validLockPeriods
                 },
                 { status: 400 }
             );
@@ -152,15 +153,23 @@ export async function POST(req: Request) {
         }
 
         // ============================================
-        // 6. CALCULATE DATES & APY
+        // 6. CALCULATE DATES & TOTAL RETURN (SIMPLE INTEREST)
         // ============================================
         const now = new Date();
         const unlockDate = new Date(now);
         unlockDate.setDate(unlockDate.getDate() + lockPeriod);
-        const apy = calculateAPY(lockPeriod);
+        const totalReturn = calculateTotalReturn(lockPeriod);
+        
+        // Calculate expected final amount
+        const dailyProfit = amount * 0.01;
+        const totalProfit = dailyProfit * lockPeriod;
+        const expectedFinalAmount = amount + totalProfit;
 
-        console.log("\n📊 Stake Calculation:");
-        console.log("   APY for " + lockPeriod + " days: " + apy + "%");
+        console.log("\n📊 Stake Calculation (SIMPLE INTEREST):");
+        console.log("   Total Return for " + lockPeriod + " days: " + totalReturn + "%");
+        console.log("   Daily Profit: $" + dailyProfit.toFixed(2));
+        console.log("   Total Profit: $" + totalProfit.toFixed(2));
+        console.log("   Expected Final Amount: $" + expectedFinalAmount.toFixed(2));
         console.log("   Start Date:", now.toISOString());
         console.log("   Unlock Date:", unlockDate.toISOString());
 
@@ -232,7 +241,7 @@ export async function POST(req: Request) {
             unlockDate: unlockDate,
             lockPeriod: lockPeriod,
             status: 'active' as const,
-            apy: apy,
+            apy: totalReturn, // Using simple interest total return
             earnedRewards: 0
         };
 
@@ -287,12 +296,15 @@ export async function POST(req: Request) {
         // 12. SUCCESS RESPONSE
         // ============================================
         console.log("\n" + "=".repeat(60));
-        console.log("✅ STAKE CREATED SUCCESSFULLY");
+        console.log("✅ STAKE CREATED SUCCESSFULLY (SIMPLE INTEREST)");
         console.log("=".repeat(60));
         console.log("   Stake ID:", newStake._id);
         console.log("   Amount: $" + amount);
         console.log("   Lock Period:", lockPeriod + " days");
-        console.log("   APY:", apy + "%");
+        console.log("   Total Return:", totalReturn + "%");
+        console.log("   Daily Profit: $" + dailyProfit.toFixed(2));
+        console.log("   Total Profit: $" + totalProfit.toFixed(2));
+        console.log("   Expected Final: $" + expectedFinalAmount.toFixed(2));
         console.log("   New Wallet Balance: $" + user.walletBalance);
         console.log("   New Staked Balance: $" + user.stakedBalance);
         console.log("=".repeat(60) + "\n");
@@ -311,8 +323,11 @@ export async function POST(req: Request) {
                     unlockDate: newStake.unlockDate,
                     status: newStake.status,
                     cycle: newStake.cycle,
-                    apy: apy,
-                    dailyReward: (amount * 0.01).toFixed(2)
+                    totalReturn: totalReturn,
+                    dailyReward: dailyProfit.toFixed(2),
+                    totalProfit: totalProfit.toFixed(2),
+                    expectedFinal: expectedFinalAmount.toFixed(2),
+                    interestType: "simple" // ✅ NEW: Indicate simple interest
                 }
             }
         }, { status: 201 });

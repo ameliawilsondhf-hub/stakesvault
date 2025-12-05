@@ -13,7 +13,7 @@ export interface IStake extends Document {
   
   // Amounts
   originalAmount: number;      // Initial stake amount
-  currentAmount: number;        // Current amount (with compounded profit)
+  currentAmount: number;        // Current amount (with simple interest profit)
   
   // Dates
   startDate: Date;
@@ -21,7 +21,7 @@ export interface IStake extends Document {
   lastProfitDate: Date;
   
   // Lock Period
-  lockPeriod: number;           // 30, 60, or 90 days
+  lockPeriod: number;           // ✅ UPDATED: Now supports 30-1825 days
   
   // Status
   status: 'locked' | 'unlocked';
@@ -102,11 +102,11 @@ const StakeSchema = new Schema<IStake>(
       default: () => new Date()
     },
     
-    // Lock Period
+    // Lock Period - ✅ UPDATED: Support all durations (30d to 5 years)
     lockPeriod: {
       type: Number,
       required: true,
-      enum: [30, 60, 90],
+      enum: [30, 60, 90, 120, 180, 270, 365, 730, 1095, 1460, 1825], // ✅ All 11 plans
       index: true
     },
     
@@ -158,36 +158,56 @@ StakeSchema.index({ status: 1, unlockDate: 1 });
 StakeSchema.index({ status: 1, lastProfitDate: 1 });
 StakeSchema.index({ autoRelock: 1, autoRelockAt: 1 });
 
-// Helper Methods
+// ✅ FIXED: Simple Interest - Daily Profit Method
 StakeSchema.methods.addDailyProfit = function() {
-  const profit = this.currentAmount * 0.01; // 1% daily
-  this.currentAmount += profit;
+  // ✅ CRITICAL FIX: Use originalAmount (not currentAmount) for simple interest
+  const profit = this.originalAmount * 0.01; // 1% of ORIGINAL amount
+  
+  // ✅ DON'T update currentAmount - keep it same as original for simple interest
+  // this.currentAmount stays unchanged
+  
+  // ✅ Only update totalProfit
   this.totalProfit += profit;
   
   // Add to history
   this.profitHistory.push({
     date: new Date(),
     profit: profit,
-    balanceAfter: this.currentAmount
+    balanceAfter: this.originalAmount + this.totalProfit // Show total value
   });
   
   this.lastProfitDate = new Date();
+  
+  console.log(`💰 Daily profit added: $${profit.toFixed(2)} (Simple Interest)`);
+  console.log(`   Original: $${this.originalAmount} | Total Profit: $${this.totalProfit.toFixed(2)}`);
+  
   return profit;
 };
 
+// ✅ Unlock Method (No changes needed - already OK)
 StakeSchema.methods.unlock = function() {
   this.status = 'unlocked';
+  
+  // Update currentAmount to include all profits when unlocking
+  this.currentAmount = this.originalAmount + this.totalProfit;
   
   // Set auto re-lock date (48 hours from now)
   const relockDate = new Date();
   relockDate.setHours(relockDate.getHours() + 48);
   this.autoRelockAt = relockDate;
+  
+  console.log(`🔓 Stake unlocked: $${this.originalAmount} + $${this.totalProfit} = $${this.currentAmount}`);
 };
 
+// ✅ Re-lock Method (No changes needed - already OK)
 StakeSchema.methods.relock = function() {
   const now = new Date();
   this.status = 'locked';
   this.startDate = now;
+  
+  // ✅ IMPORTANT: When re-locking, the currentAmount becomes the new originalAmount
+  this.originalAmount = this.currentAmount;
+  this.totalProfit = 0; // Reset profit for new cycle
   
   // Set new unlock date based on same lock period
   const newUnlockDate = new Date(now);
@@ -197,6 +217,8 @@ StakeSchema.methods.relock = function() {
   this.lastProfitDate = now;
   this.autoRelockAt = null;
   this.cycle += 1;
+  
+  console.log(`🔒 Stake re-locked: Cycle ${this.cycle} | Amount: $${this.originalAmount}`);
 };
 
 // Mongoose Model Export

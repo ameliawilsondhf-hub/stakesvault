@@ -6,26 +6,46 @@ export async function GET() {
   try {
     await connectDB();
 
-    const stakes = await Stake.find();
+    console.log("🔄 Starting auto-lock checker...");
+
+    const stakes = await Stake.find({
+      status: "unlocked",
+      autoRelock: true,
+      autoRelockAt: { $lte: new Date() }
+    });
+
+    console.log(`📊 Found ${stakes.length} stakes ready for auto-lock`);
 
     const now = new Date();
+    let lockedCount = 0;
 
     for (let st of stakes) {
-      if (st.status === "unlocked") {
-        if (now >= st.autoLockCheckDate) {
-          // Auto lock again
-          st.status = "locked";
-          st.startDate = now;
-          st.unlockDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-          st.lastProfitDate = now;
-          st.autoLockCheckDate = st.unlockDate;
-          await st.save();
-        }
+      try {
+        // Use the relock() method from Stake model
+        st.relock();
+        
+        await st.save();
+        
+        lockedCount++;
+        console.log(`✅ Auto-locked stake ${st._id} (Cycle: ${st.cycle})`);
+      } catch (error) {
+        console.error(`❌ Failed to lock stake ${st._id}:`, error);
       }
     }
 
-    return NextResponse.json({ success: true, msg: "Auto lock done" });
-  } catch (error) {
-    return NextResponse.json({ success: false, error });
+    console.log(`🔒 Auto-locked: ${lockedCount}/${stakes.length} stakes`);
+
+    return NextResponse.json({ 
+      success: true, 
+      msg: "Auto lock done",
+      locked: lockedCount,
+      total: stakes.length
+    });
+  } catch (error: any) {
+    console.error("❌ Auto-lock error:", error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message 
+    }, { status: 500 });
   }
 }

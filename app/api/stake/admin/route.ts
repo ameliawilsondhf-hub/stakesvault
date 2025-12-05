@@ -119,13 +119,17 @@ export async function GET(req: Request) {
     // ✅ Pagination
     const paginatedStakes = filteredStakes.slice(skip, skip + limit);
 
-    // ✅ Profit Calculations
+    // ✅ FIXED: Simple Interest Calculation
     const calculateCurrentBalance = (amount: number, startDate: Date) => {
       const daysPassed = Math.floor(
         (new Date().getTime() - new Date(startDate).getTime()) /
           (1000 * 60 * 60 * 24)
       );
-      return amount * Math.pow(1.01, daysPassed);
+      
+      // Simple Interest: Principal + (Daily Profit × Days)
+      const dailyProfit = amount * 0.01;
+      const totalProfit = dailyProfit * daysPassed;
+      return amount + totalProfit;
     };
 
     const activeStakes = allStakes.filter((s) => s.status === "active");
@@ -154,6 +158,7 @@ export async function GET(req: Request) {
             allStakes.length
           : 0,
       totalUsers: users.length,
+      interestType: "simple", // ✅ NEW: Indicate simple interest
     };
 
     // ✅ FINAL RESPONSE (ANTI-CACHE ✅)
